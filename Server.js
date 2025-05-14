@@ -30,10 +30,13 @@ mongoose.connect(mongoUri)
 // Routes
 
 const courseRoutes = require('./courses/courseRoutes');
+const cartRoutes = require('./courses/cartRoutes');
+const wishlistRoutes  = require('./courses/wishlistRoutes');
 
 
 app.use('/api',courseRoutes);
-
+app.use('/api',cartRoutes);
+app.use('/api',wishlistRoutes);
 
 app.get('/', (req, res) => {
     res.json({ message: "Hello from the server" });

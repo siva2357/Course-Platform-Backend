@@ -25,4 +25,5 @@ router.patch('/course/verify/:id', courseController.verifyCourse);
 router.patch('/course/reject/:id', courseController.rejectCourse);
 
 
+
 module.exports = router;

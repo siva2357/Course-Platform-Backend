@@ -17,6 +17,13 @@ update course by id
 delete course 
 get courses
 get course by id 
+verify course
+reject course
 
+Add wishlist by id
+Get wishlist all items
+Delete wishlist by id
 
-
+Add cart by id
+Get cart all items
+Delete cart by id 

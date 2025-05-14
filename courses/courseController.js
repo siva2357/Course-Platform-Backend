@@ -103,3 +103,8 @@ exports.verifyCourse = async (req, res) => {
       res.status(500).json({ message: "Error rejecting course", error: err });
     }
   };
+
+
+
+
+
