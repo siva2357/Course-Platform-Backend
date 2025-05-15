@@ -1,0 +1,29 @@
+Dependencies
+============
+ Security & Auth: npm install bcrypt bcryptjs jsonwebtoken jwt-decode
+ Server & Middleware: npm install express cors helmet cookie-parser
+ Utilities: npm install dotenv joi init
+ Encryption: npm install encryptor simple-encryptor
+ Email: npm install nodemailer
+ Database: npm install mongoose
+ Development Tool (Auto Restart): npm install --save-dev nodemon
+
+
+Course - Actions
+=================
+Creat course 
+edit course by id 
+update course by id
+delete course 
+get courses
+get course by id 
+verify course
+reject course
+
+Add wishlist by id
+Get wishlist all items
+Delete wishlist by id
+
+Add cart by id
+Get cart all items
+Delete cart by id 
