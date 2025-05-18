@@ -29,10 +29,14 @@ mongoose.connect(mongoUri)
 
 // Routes
 
+const instructorAuthRoutes = require('./Authentication/instructorRoutes')
+
 const courseRoutes = require('./courses/courseRoutes');
 const cartRoutes = require('./courses/cartRoutes');
 const wishlistRoutes  = require('./courses/wishlistRoutes');
 
+
+app.use('/api',instructorAuthRoutes);
 
 app.use('/api',courseRoutes);
 app.use('/api',cartRoutes);
