@@ -1,9 +1,10 @@
+const loginController = require('./loginController');
 const express = require('express');
 const router = express.Router();
-const loginController = require('./loginController');
+const { identifier } = require('../Middleware/identification');
 
 router.post('/auth/login/user', loginController.login);
-router.post('/auth/logout/user', loginController.logout);
+router.post('/auth/logout/user',  identifier,loginController.logout);
 
 
 module.exports = router;

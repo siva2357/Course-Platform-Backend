@@ -30,8 +30,8 @@ mongoose.connect(mongoUri)
 // Routes
 const authRoutes =  require('./Authentication/loginRoutes')
 const instructorAuthRoutes = require('./Authentication/instructorRoutes')
-
-
+const instructorProfileRoutes = require('./ProfileDetails/instructorRoutes')
+const otpVerificationRoutes = require('./otp verification/otpVerificationRoutes')
 const courseRoutes = require('./courses/courseRoutes');
 const cartRoutes = require('./courses/cartRoutes');
 const wishlistRoutes  = require('./courses/wishlistRoutes');
@@ -39,7 +39,8 @@ const wishlistRoutes  = require('./courses/wishlistRoutes');
 
 app.use('/api',instructorAuthRoutes);
 app.use('/api',authRoutes);
-
+app.use('/api',otpVerificationRoutes)
+app.use('/api',instructorProfileRoutes);
 
 app.use('/api',courseRoutes);
 app.use('/api',cartRoutes);
