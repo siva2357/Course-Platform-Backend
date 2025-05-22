@@ -35,15 +35,15 @@ const otpVerificationRoutes = require('./otp verification/otpVerificationRoutes'
 const courseRoutes = require('./courses/courseRoutes');
 const cartRoutes = require('./courses/cartRoutes');
 const wishlistRoutes  = require('./courses/wishlistRoutes');
-const passwordRoutes = require('./Password/passwordRoutes')
-
+const changePasswordRoutes = require('./Password/changePasswordRoutes')
+const forgotPasswordRoutes = require('./Password/forgotPasswordRoutes')
 app.use('/api',instructorAuthRoutes);
 app.use('/api',authRoutes);
 app.use('/api',otpVerificationRoutes)
 app.use('/api',instructorProfileRoutes);
 
-app.use('/api',passwordRoutes);
-
+app.use('/api',changePasswordRoutes);
+app.use('/api',forgotPasswordRoutes);
 
 app.use('/api',courseRoutes);
 app.use('/api',cartRoutes);
