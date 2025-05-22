@@ -1,9 +1,8 @@
 const mongoose = require("mongoose");
 
-const instructorProfileSchema = mongoose.Schema(
-  {
-    instructorId: { type: mongoose.Schema.Types.ObjectId, ref: "Instructor" },
-    profileDetails: {
+const studentProfileSchema = mongoose.Schema(
+  { studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+      profileDetails: {
       profilePicture: {
         fileName: { type: String, required: true },
         url: { type: String, required: true }
@@ -24,4 +23,4 @@ const instructorProfileSchema = mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model("InstructorProfile", instructorProfileSchema);
+module.exports = mongoose.model("StudentProfile", studentProfileSchema);

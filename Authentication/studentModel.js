@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const instructorSchema = mongoose.Schema({
+const studentSchema = mongoose.Schema({
     registrationDetails: {
         fullName: { type: String, required: true},
         userName: { type: String, unique: true, required: true},
@@ -12,10 +12,10 @@ const instructorSchema = mongoose.Schema({
         forgotPasswordCode: { type: String, select: false },
         forgotPasswordCodeValidation: { type: Number, select: false }
     },
-    role: { type: String, default: 'instructor' },
+    role: { type: String, default: 'student' },
     lastLoginAt: { type: Date },
     lastLogoutAt: { type: Date }, 
     status: { type: String, enum: ["active", "inactive"], default: "inactive" }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Instructor', instructorSchema);
+module.exports = mongoose.model('Student', studentSchema);

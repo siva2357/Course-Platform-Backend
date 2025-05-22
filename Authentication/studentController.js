@@ -1,5 +1,5 @@
 const { signupSchema} = require("../Middleware/validator");
-const instructor = require('./instructorModel')
+const student = require('./studentModel')
 const bcrypt = require('bcryptjs');
 
 exports.signup = async (req, res) => {
@@ -12,26 +12,26 @@ exports.signup = async (req, res) => {
           return res.status(400).json({ success: false, message: error.details[0].message });
       }
 
-      const existingInstructor = await instructor.findOne({ 'registrationDetails.email': email });
-      if (existingInstructor) {
-          return res.status(400).json({ success: false, message: "Instructor already exists!" });
+      const existingStudent = await student.findOne({ 'registrationDetails.email': email });
+      if (existingStudent) {
+          return res.status(400).json({ success: false, message: "Student already exists!" });
       }
 
       const saltRounds = 12;
       const salt = await bcrypt.genSalt(saltRounds);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      const newInstructor = new instructor({
+      const newStudent = new instructor({
           registrationDetails: {
-              fullName,
+             fullName,
               userName,
               email,
               password: hashedPassword
           },
-          role: role || 'instructor',
+          role: role || 'student',
       });
 
-      const result = await newInstructor.save();
+      const result = await newStudent.save();
 
       res.status(201).json({
           success: true,

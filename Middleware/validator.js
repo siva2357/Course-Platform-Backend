@@ -2,6 +2,8 @@ const joi = require('joi');
 
 exports.signupSchema = joi.object({
     registrationDetails: joi.object({
+        fullName: joi.string().required().pattern(new RegExp('^[A-Za-z ]+$')),
+        userName: joi.string().required().pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$')),
         email: joi.string().min(6).max(60).required().email({ tlds: { allow: ['com', 'net'] }}),
         password: joi.string().required().pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d).{8,}$')),
     }).required(),
