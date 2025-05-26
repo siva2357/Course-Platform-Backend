@@ -9,5 +9,7 @@ router.post('/instructor/profile-details', identifier, instructorProfileControll
 router.put('/instructor/:instructorId/profile-details', identifier, instructorProfileController.updateInstructorProfile);
 router.get('/instructor/:instructorId/profile-details', identifier, instructorProfileController.getInstructorProfile);
 router.get('/instructor/:id', identifier, instructorProfileController.getInstructorById);
+router.get('/instructor/:id/profile', identifier, instructorProfileController.getInstructorHeaderInfo);
+
 router.delete('/auth/instructor/:id/delete', identifier, instructorProfileController.deleteInstructorById);
 module.exports = router;

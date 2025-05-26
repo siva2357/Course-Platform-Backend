@@ -147,3 +147,35 @@ exports.deleteInstructorById = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// Get Header Profile
+exports.getInstructorHeaderInfo = async (req, res) => {
+  try {
+    const instructorId = req.params.id; // match route param
+
+    if (!instructorId) {
+      return res.status(400).json({ message: "Instructor ID is required" });
+    }
+
+    const instructor = await Instructor.findById(instructorId);
+    const instructorProfile = await InstructorProfile.findOne({ instructorId });
+
+    if (!instructor || !instructorProfile) {
+      return res.status(404).json({ message: "Instructor or profile not found" });
+    }
+
+    const headerInfo = {
+      _id: instructor._id,
+      fullName: instructor.registrationDetails.fullName,
+      profilePictureUrl: instructorProfile.profileDetails.profilePicture?.url || null
+    };
+
+    return res.status(200).json(headerInfo);
+  } catch (error) {
+    console.error("Error fetching header info:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
