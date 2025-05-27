@@ -19,9 +19,11 @@
     "nodemon": "^3.1.6",
     "simple-encryptor": "^3.0.0"
   },
- "engines": {
-    "node": "18.x"
+
+  "engines": {
+    "node": "20.x"
   },
+
   "scripts": {
     "start": "node Server.js",
     "build": "npm install"
