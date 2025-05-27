@@ -8,42 +8,35 @@ exports.identifier = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Unauthorized: No token provided' });
   }
 
-  // Remove Bearer prefix if present
+  // Remove "Bearer " prefix if present
   if (token.startsWith('Bearer ')) {
-    token = token.split(' ')[1];
+    token = token.slice(7);
   } else {
     return res.status(403).json({ success: false, message: 'Unauthorized: Invalid token format' });
   }
 
   try {
-    const jwtVerified = jwt.verify(token, process.env.TOKEN_SECRET);
+    const decoded = jwt.verify(token, process.env.TOKEN_SECRET);
 
-    if (!jwtVerified || !jwtVerified.userId || !jwtVerified.role) {
-      return res.status(403).json({ success: false, message: 'Unauthorized: Token missing fields' });
+    if (!decoded?.userId || !decoded?.role) {
+      return res.status(403).json({ success: false, message: 'Unauthorized: Token missing required fields' });
     }
 
-    // Inject common user object
-    req.user = jwtVerified;
+    // Attach user info
+    req.user = decoded;
 
-    // Role-based ID assignment
-    switch (jwtVerified.role) {
-      case 'instructor':
-        req.instructorId = jwtVerified.userId;
-        break;
-      case 'student':
-        req.studentId = jwtVerified.userId;
-        break;
-      case 'recruiter':
-        req.recruiterId = jwtVerified.userId;
-        break;
-      case 'admin':
-        req.adminId = jwtVerified.userId;
-        break;
-      default:
-        return res.status(403).json({ success: false, message: 'Unauthorized: Invalid role' });
+    // Role-specific ID assignment
+    if (decoded.role === 'instructor') {
+      req.instructorId = decoded.userId;
+    } else if (decoded.role === 'student') {
+      req.studentId = decoded.userId;
+    } else if (decoded.role === 'admin') {
+      req.adminId = decoded.userId;
+    } else {
+      return res.status(403).json({ success: false, message: 'Unauthorized: Invalid role' });
     }
 
-    next(); // proceed to controller
+    next(); // Proceed to controller
 
   } catch (error) {
     console.error('Token verification error:', error.message);

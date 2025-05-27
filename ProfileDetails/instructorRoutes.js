@@ -8,8 +8,11 @@ const { identifier } = require('../Middleware/identification');
 router.post('/instructor/profile-details', identifier, instructorProfileController.createInstructorProfile);
 router.put('/instructor/:instructorId/profile-details', identifier, instructorProfileController.updateInstructorProfile);
 router.get('/instructor/:instructorId/profile-details', identifier, instructorProfileController.getInstructorProfile);
-router.get('/instructor/:id', identifier, instructorProfileController.getInstructorById);
+router.get('/instructor/:id/profile-settings', identifier, instructorProfileController.getInstructorById);
 router.get('/instructor/:id/profile', identifier, instructorProfileController.getInstructorHeaderInfo);
+router.put('/instructor/:instructorId/profile/social-media', identifier, instructorProfileController.updateSocialMedia);
+router.put('/instructor/:instructorId/profile/picture', identifier, instructorProfileController.updateProfilePicture);
+router.put('/instructor/:instructorId/profile/basic-details', identifier, instructorProfileController.updateBasicDetails);
 
 router.delete('/auth/instructor/:id/delete', identifier, instructorProfileController.deleteInstructorById);
 module.exports = router;

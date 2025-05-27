@@ -167,9 +167,11 @@ exports.getInstructorHeaderInfo = async (req, res) => {
     }
 
     const headerInfo = {
-      _id: instructor._id,
+      profile:{
       fullName: instructor.registrationDetails.fullName,
       profilePictureUrl: instructorProfile.profileDetails.profilePicture?.url || null
+      }
+
     };
 
     return res.status(200).json(headerInfo);
@@ -179,3 +181,74 @@ exports.getInstructorHeaderInfo = async (req, res) => {
   }
 };
 
+
+// UPDATE ONLY SOCIAL MEDIA
+exports.updateSocialMedia = async (req, res) => {
+  try {
+    const { socialMedia } = req.body;
+    if (!Array.isArray(socialMedia)) {
+      return res.status(400).json({ message: "Invalid socialMedia format" });
+    }
+
+    const profile = await InstructorProfile.findOne({ instructorId: req.instructorId });
+    if (!profile) {
+      return res.status(404).json({ message: "Instructor profile not found" });
+    }
+
+    profile.profileDetails.socialMedia = socialMedia;
+    await profile.save();
+
+    res.status(200).json({ message: "Social media updated", profile });
+  } catch (error) {
+    console.error("Error updating social media:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+// UPDATE ONLY PROFILE PICTURE
+exports.updateProfilePicture = async (req, res) => {
+  try {
+    const { profilePicture } = req.body;
+    if (!profilePicture?.fileName || !profilePicture?.url) {
+      return res.status(400).json({ message: "Invalid profile picture" });
+    }
+
+    const profile = await InstructorProfile.findOne({ instructorId: req.instructorId });
+    if (!profile) {
+      return res.status(404).json({ message: "Instructor profile not found" });
+    }
+
+    profile.profileDetails.profilePicture = profilePicture;
+    await profile.save();
+
+    res.status(200).json({ message: "Profile picture updated", profile });
+  } catch (error) {
+    console.error("Error updating profile picture:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+// UPDATE ONLY BASIC DETAILS (userName, gender, bioDescription)
+exports.updateBasicDetails = async (req, res) => {
+  try {
+    const { userName, gender, bioDescription } = req.body;
+
+    const profile = await InstructorProfile.findOne({ instructorId: req.instructorId });
+    if (!profile) {
+      return res.status(404).json({ message: "Instructor profile not found" });
+    }
+
+    if (userName) profile.profileDetails.userName = userName;
+    if (gender) profile.profileDetails.gender = gender;
+    if (bioDescription) profile.profileDetails.bioDescription = bioDescription;
+
+    await profile.save();
+
+    res.status(200).json({ message: "Basic details updated", profile });
+  } catch (error) {
+    console.error("Error updating basic details:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
