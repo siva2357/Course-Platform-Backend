@@ -167,11 +167,13 @@ exports.getInstructorHeaderInfo = async (req, res) => {
     }
 
     const headerInfo = {
-      profile:{
-      fullName: instructor.registrationDetails.fullName,
-      profilePictureUrl: instructorProfile.profileDetails.profilePicture?.url || null
+      profile: {
+        fullName: instructor.registrationDetails.fullName,
+        profilePicture: {
+          fileName: instructorProfile.profileDetails.profilePicture?.fileName || null,
+          url: instructorProfile.profileDetails.profilePicture?.url || null
+        }
       }
-
     };
 
     return res.status(200).json(headerInfo);
@@ -182,7 +184,98 @@ exports.getInstructorHeaderInfo = async (req, res) => {
 };
 
 
-// UPDATE ONLY SOCIAL MEDIA
+
+
+exports.getInstructorBasicDetails = async (req, res) => {
+  try {
+    const instructorId = req.params.instructorId;
+
+    if (!instructorId) {
+      return res.status(400).json({ message: "Instructor ID is required" });
+    }
+
+    const instructor = await Instructor.findById(instructorId);
+    const profile = await InstructorProfile.findOne({ instructorId });
+
+    if (!instructor || !profile) {
+      return res.status(404).json({ message: "Instructor or profile not found" });
+    }
+
+    const basicDetails = {
+      fullName: instructor.registrationDetails.fullName,
+      userName: instructor.registrationDetails.userName,
+      email: instructor.registrationDetails.email,
+      gender: profile.profileDetails.gender,
+      bioDescription: profile.profileDetails.bioDescription,
+    };
+
+    res.status(200).json(basicDetails);
+  } catch (error) {
+    console.error("Error fetching basic details:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+exports.updateBasicDetails = async (req, res) => {
+  try {
+    const instructorId = req.params.instructorId;
+    const { userName, gender, bioDescription } = req.body;
+
+    if (!instructorId) {
+      return res.status(400).json({ message: "Instructor ID is required" });
+    }
+
+    const instructor = await Instructor.findById(instructorId);
+    const profile = await InstructorProfile.findOne({ instructorId });
+
+    if (!instructor || !profile) {
+      return res.status(404).json({ message: "Instructor or profile not found" });
+    }
+
+    // Update userName in Instructor model
+    if (userName) {
+      instructor.registrationDetails.userName = userName;
+      await instructor.save();
+    }
+
+    // Update profile details
+    if (gender) profile.profileDetails.gender = gender;
+    if (bioDescription) profile.profileDetails.bioDescription = bioDescription;
+
+    await profile.save();
+
+    res.status(200).json({ message: "Basic details updated successfully" });
+  } catch (error) {
+    console.error("Error updating basic details:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
+exports.getInstructorSocialMedia = async (req, res) => {
+  try {
+    const instructorId = req.params.instructorId;
+
+    const profile = await InstructorProfile.findOne(
+      { instructorId },
+      { 'profileDetails.socialMedia': 1, _id: 0 }
+    );
+
+    if (!profile) {
+      return res.status(404).json({ message: "Instructor profile not found" });
+    }
+
+    res.status(200).json({
+      message: "Social media received",
+      socialMedia: profile.profileDetails.socialMedia
+    });
+  } catch (error) {
+    console.error("Error fetching social media:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 exports.updateSocialMedia = async (req, res) => {
   try {
     const { socialMedia } = req.body;
@@ -198,7 +291,10 @@ exports.updateSocialMedia = async (req, res) => {
     profile.profileDetails.socialMedia = socialMedia;
     await profile.save();
 
-    res.status(200).json({ message: "Social media updated", profile });
+    res.status(200).json({
+      message: "Social media updated",
+      socialMedia: profile.profileDetails.socialMedia
+    });
   } catch (error) {
     console.error("Error updating social media:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -206,15 +302,37 @@ exports.updateSocialMedia = async (req, res) => {
 };
 
 
-// UPDATE ONLY PROFILE PICTURE
+
+exports.getInstructorProfilePicture = async (req, res) => {
+  try {
+    const instructorId = req.params.instructorId;
+
+    const profile = await InstructorProfile.findOne(
+      { instructorId },
+      { 'profileDetails.profilePicture': 1, _id: 0 }
+    );
+
+    if (!profile) {
+      return res.status(404).json({ message: "Instructor profile not found" });
+    }
+
+    res.status(200).json({ profilePicture: profile.profileDetails.profilePicture });
+  } catch (error) {
+    console.error("Error fetching profile picture:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 exports.updateProfilePicture = async (req, res) => {
   try {
+    const instructorId = req.params.instructorId;
     const { profilePicture } = req.body;
+
     if (!profilePicture?.fileName || !profilePicture?.url) {
       return res.status(400).json({ message: "Invalid profile picture" });
     }
 
-    const profile = await InstructorProfile.findOne({ instructorId: req.instructorId });
+    const profile = await InstructorProfile.findOne({ instructorId });
     if (!profile) {
       return res.status(404).json({ message: "Instructor profile not found" });
     }
@@ -222,7 +340,7 @@ exports.updateProfilePicture = async (req, res) => {
     profile.profileDetails.profilePicture = profilePicture;
     await profile.save();
 
-    res.status(200).json({ message: "Profile picture updated", profile });
+    res.status(200).json({ message: "Profile picture updated", profilePicture });
   } catch (error) {
     console.error("Error updating profile picture:", error);
     res.status(500).json({ message: "Internal server error" });
@@ -230,25 +348,5 @@ exports.updateProfilePicture = async (req, res) => {
 };
 
 
-// UPDATE ONLY BASIC DETAILS (userName, gender, bioDescription)
-exports.updateBasicDetails = async (req, res) => {
-  try {
-    const { userName, gender, bioDescription } = req.body;
 
-    const profile = await InstructorProfile.findOne({ instructorId: req.instructorId });
-    if (!profile) {
-      return res.status(404).json({ message: "Instructor profile not found" });
-    }
 
-    if (userName) profile.profileDetails.userName = userName;
-    if (gender) profile.profileDetails.gender = gender;
-    if (bioDescription) profile.profileDetails.bioDescription = bioDescription;
-
-    await profile.save();
-
-    res.status(200).json({ message: "Basic details updated", profile });
-  } catch (error) {
-    console.error("Error updating basic details:", error);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
