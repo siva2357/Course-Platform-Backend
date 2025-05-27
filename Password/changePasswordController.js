@@ -1,4 +1,4 @@
-const { changePasswordSchema} = require("../middleware/validator");
+const { signupSchema} = require("../Middleware/validator");
 const instructor = require('../Authentication/instructorModel');
 const bcrypt = require('bcryptjs');
 
