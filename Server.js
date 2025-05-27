@@ -13,13 +13,23 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
 }));
+
+
+app.use(cors({
+    origin: ['http://localhost:4200', 'https://course-hub-18005.firebaseapp.com'], // Allow both local and deployed frontend URLs
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    credentials: true, // Allow credentials (cookies, headers)
+}));
+
+
+
 app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-
-const mongoUri = process.env.MONGO_URI_LOCAL;
+// Choose the correct MongoDB URI based on the environment
+const mongoUri = process.env.NODE_ENV === 'production' ? process.env.MONGO_URI : process.env.MONGO_URI_LOCAL;
 mongoose.connect(mongoUri)
     .then(() => console.log("✅ Database connected"))
     .catch(err => {
