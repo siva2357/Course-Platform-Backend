@@ -9,13 +9,6 @@ const mongoose = require('mongoose');
 const app = express();
 
 app.use(cors({
-    origin: ['http://localhost:4200'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
-    credentials: true,
-}));
-
-
-app.use(cors({
     origin: ['http://localhost:4200', 'https://course-hub-18005.firebaseapp.com'], // Allow both local and deployed frontend URLs
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true, // Allow credentials (cookies, headers)
