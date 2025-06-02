@@ -1,44 +1,47 @@
-// models/Course.js
 const mongoose = require("mongoose");
 
+const lectureSchema = new mongoose.Schema({
+  lectureTitle: { type: String},
+  lectureDescription: { type: String},
+  lectureContent: { type: String},
+   lectureResources: { type: String },
+}, { _id: false });
+
+const sectionSchema = new mongoose.Schema({
+  sectionTitle: { type: String},
+  lectures: [lectureSchema]
+}, { _id: false });
+
 const courseSchema = new mongoose.Schema({
-  courseTitle: { type: String, required: true },
-  courseCategory: { type: String, required: true },
-  courseDescription: { type: String, required: true },
-  courseThumbnail: { type: String, required: true },
-  coursePreview: { type: String, required: true },
+  landingPage: {
+    courseTitle: { type: String },
+    courseCategory: { type: String},
+    courseDescription: { type: String},
+    courseThumbnail: { type: String},
+    coursePreview: { type: String}
+  },
 
-  learningObjectives: [{ type: String, required: true }],
-  courseRequirements: [{ type: String, required: true }],
-  courseLevel: { type: String, required: true },
+  coursePlan: {
+    learningObjectives: [{ type: String }],
+    courseRequirements: [{ type: String }],
+    courseLevel: [{ type: String }]
+  },
+  curriculum: {
+    sections: [sectionSchema]
+  },
 
-  curriculum: [
-    {
-      sections: [
-        {
-          sectionTitle: { type: String, required: true },
-          lectures: [
-            {
-              lectureTitle: { type: String, required: true },
-              lectureDescription: { type: String, required: true },
-              lectureContent: { type: String, required: true },
-              lectureResources: { type: String, required: true },
-            },
-          ],
-        },
-      ],
-    },
-  ],
-  
-  price: { type: String, required: true },
-  discountPrice: { type: String, required: true },
-  status: { type: String, enum: ["Pending", "Published", "Rejected"], default: "Pending" }
-},
-{ timestamps: true } // Adds `createdAt` and `updatedAt` automatically
+  price: {
+    currency: { type: String },
+    pricingTier: { type: String },
+    amount: { type: Number}
+  },
 
-);
+  status: {
+    type: String,
+    enum: ["Pending", "Published", "Rejected", "Draft"],
+    default: "Draft"
+  }
+
+}, { timestamps: true });
 
 module.exports = mongoose.model("Course", courseSchema);
-
-
-
