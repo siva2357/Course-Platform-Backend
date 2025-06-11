@@ -37,10 +37,16 @@ const cartRoutes = require('./courses/cartRoutes');
 const wishlistRoutes  = require('./courses/wishlistRoutes');
 const changePasswordRoutes = require('./Password/changePasswordRoutes')
 const forgotPasswordRoutes = require('./Password/forgotPasswordRoutes')
+const studentAuthRoutes = require('./Authentication/studentRoutes')
+const studentProfileRoutes = require('./ProfileDetails/studentRoutes')
+
 app.use('/api',instructorAuthRoutes);
+app.use('/api',studentAuthRoutes);
+
 app.use('/api',authRoutes);
 app.use('/api',otpVerificationRoutes)
 app.use('/api',instructorProfileRoutes);
+app.use('/api',studentProfileRoutes);
 
 app.use('/api',changePasswordRoutes);
 app.use('/api',forgotPasswordRoutes);

@@ -1,18 +1,30 @@
 const joi = require('joi');
-const instructor = require('../Authentication/instructorModel');
+const Instructor = require('../Authentication/instructorModel');
+const Student = require('../Authentication/studentModel');
 const transport = require("../Middleware/sendMail");
 const { hmacProcess } = require("../utils/hashing");
 const bcrypt = require('bcryptjs');
 
-// ✅ Step 1: Send Forgot Password OTP
+// Utility function to return correct model
+const getModelByRole = (role) => {
+    if (role === 'instructor') return Instructor;
+    if (role === 'student') return Student;
+    return null;
+};
+
+// ✅ Step 1: Send OTP
 exports.sendForgotPasswordCode = async (req, res) => {
-    const { email } = req.body;
+    const { email, role } = req.body;
+    const Model = getModelByRole(role);
+
+    if (!Model) {
+        return res.status(400).json({ success: false, message: "Invalid role!" });
+    }
 
     try {
-        const existingUser = await instructor.findOne({ 'registrationDetails.email': email });
-
+        const existingUser = await Model.findOne({ 'registrationDetails.email': email });
         if (!existingUser) {
-            return res.status(404).json({ success: false, message: "Instructor with this email does not exist!" });
+            return res.status(404).json({ success: false, message: `${role} with this email does not exist!` });
         }
 
         const codeValue = Math.floor(100000 + Math.random() * 900000).toString();
@@ -39,13 +51,18 @@ exports.sendForgotPasswordCode = async (req, res) => {
 
 // ✅ Step 2: Verify OTP
 exports.verifyForgotPasswordCode = async (req, res) => {
-    const { email, providedCode } = req.body;
+    const { email, providedCode, role } = req.body;
+    const Model = getModelByRole(role);
+
+    if (!Model) {
+        return res.status(400).json({ success: false, message: "Invalid role!" });
+    }
 
     try {
-        const existingUser = await instructor.findOne({ 'registrationDetails.email': email }).select("+registrationDetails.forgotPasswordCode +registrationDetails.forgotPasswordCodeValidation");
+        const existingUser = await Model.findOne({ 'registrationDetails.email': email }).select("+registrationDetails.forgotPasswordCode +registrationDetails.forgotPasswordCodeValidation");
 
         if (!existingUser) {
-            return res.status(404).json({ success: false, message: "Instructor with this email does not exist!" });
+            return res.status(404).json({ success: false, message: `${role} with this email does not exist!` });
         }
 
         if (!existingUser.registrationDetails.forgotPasswordCode || !existingUser.registrationDetails.forgotPasswordCodeValidation) {
@@ -76,13 +93,17 @@ exports.verifyForgotPasswordCode = async (req, res) => {
 
 // ✅ Step 3: Reset Password
 exports.resetPassword = async (req, res) => {
-    const { email, newPassword } = req.body;
+    const { email, newPassword, role } = req.body;
+    const Model = getModelByRole(role);
+
+    if (!Model) {
+        return res.status(400).json({ success: false, message: "Invalid role!" });
+    }
 
     try {
-        const existingUser = await instructor.findOne({ 'registrationDetails.email': email });
-
+        const existingUser = await Model.findOne({ 'registrationDetails.email': email });
         if (!existingUser) {
-            return res.status(404).json({ success: false, message: "Instructor with this email does not exist!" });
+            return res.status(404).json({ success: false, message: `${role} with this email does not exist!` });
         }
 
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -90,8 +111,7 @@ exports.resetPassword = async (req, res) => {
             return res.status(400).json({ success: false, message: "Password must be at least 8 characters long, contain one uppercase letter, one lowercase letter, one number, and one special character." });
         }
 
-        const saltRounds = 12;
-        const salt = await bcrypt.genSalt(saltRounds);
+        const salt = await bcrypt.genSalt(12);
         const hashedPassword = await bcrypt.hash(newPassword, salt);
         existingUser.registrationDetails.password = hashedPassword;
 
