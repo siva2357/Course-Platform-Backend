@@ -4,7 +4,7 @@ const courseController = require('./courseController');
 
 // Base
 router.post('/course', courseController.createCourse);
-router.get('/course/:id/get', courseController.getCourse);
+router.get('/course/:id', courseController.getCourse);
 router.get('/courses', courseController.getAllCourses);
 
 router.delete('/course/:id/delete', courseController.deleteCourse);
