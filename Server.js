@@ -4,16 +4,10 @@ const helmet = require('helmet');
 const cors = require('cors');
 const cookieParser = require("cookie-parser");
 const mongoose = require('mongoose');
-
 const app = express(); // ✅ Declare app at the top
 
-// -------------------------------
-// ✅ Razorpay webhook must come before json parser!
-const paymentRoutes = require('./Payment/paymentRoutes');
-app.use("/api", paymentRoutes); // webhook uses express.raw()
-//
-// Now all other middlewares
-// -------------------------------
+// Special RAW parser only for webhook
+app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), require('./Payment/webHookController'));
 
 app.use(cors({
     origin: ['http://localhost:4200'],
@@ -24,7 +18,7 @@ app.use(helmet({ crossOriginResourcePolicy: false }));
 app.use(cookieParser());
 app.use(express.json()); // 👈 Comes AFTER webhook route
 app.use(express.urlencoded({ extended: true }));
-
+// ✅ Routes after middleware
 // --------------------
 // Database Connection
 // --------------------
@@ -40,7 +34,6 @@ mongoose.connect(mongoUri)
 // Other Routes
 // --------------------
 const authRoutes = require('./Authentication/loginRoutes');
-const purchaseRoutes = require('./courses/purchaseRoutes');
 const instructorAuthRoutes = require('./Authentication/instructorRoutes');
 const instructorProfileRoutes = require('./ProfileDetails/instructorRoutes');
 const otpVerificationRoutes = require('./otp verification/otpVerificationRoutes');
@@ -51,6 +44,9 @@ const changePasswordRoutes = require('./Password/changePasswordRoutes');
 const forgotPasswordRoutes = require('./Password/forgotPasswordRoutes');
 const studentAuthRoutes = require('./Authentication/studentRoutes');
 const studentProfileRoutes = require('./ProfileDetails/studentRoutes');
+const purchaseRoutes = require('./Payment/purchaseRoutes');
+const certificateRoutes = require('./Certificate/certificateRoutes');
+
 
 app.use('/api', instructorAuthRoutes);
 app.use('/api', studentAuthRoutes);
@@ -64,6 +60,10 @@ app.use('/api', courseRoutes);
 app.use('/api', cartRoutes);
 app.use('/api', wishlistRoutes);
 app.use("/api", purchaseRoutes);
+app.use('/api', certificateRoutes);
+
+
+
 
 // --------------------
 // Default Route

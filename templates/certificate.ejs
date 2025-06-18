@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Certificate of Completion</title>
+  <style>
+    body {
+      font-family: 'Georgia', serif;
+      padding: 60px;
+      text-align: center;
+      background: white;
+    }
+    .container {
+      border: 10px solid #333;
+      padding: 50px;
+      max-width: 700px;
+      margin: auto;
+    }
+    h1 {
+      font-size: 48px;
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+    .name {
+      font-size: 32px;
+      font-weight: bold;
+      margin: 30px 0;
+      color: #2980b9;
+    }
+    .course {
+      font-size: 28px;
+      margin: 10px 0;
+      color: #34495e;
+    }
+    .date {
+      margin-top: 40px;
+      font-size: 18px;
+      color: #7f8c8d;
+    }
+    .signatures {
+      margin-top: 60px;
+      display: flex;
+      justify-content: space-around;
+      font-size: 16px;
+      color: #2c3e50;
+    }
+    .sign {
+      border-top: 1px solid #333;
+      width: 200px;
+      margin: 0 auto;
+      padding-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Certificate of Completion</h1>
+    <p>This is proudly presented to</p>
+    <div class="name"><%= studentName %></div>
+    <p>for successfully completing the course</p>
+    <div class="course"><%= courseTitle %></div>
+    <div class="date">Issued on: <%= issueDate %></div>
+    <div class="signatures">
+      <div>
+        <div class="sign">Instructor</div>
+      </div>
+      <div>
+        <div class="sign">Director</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
