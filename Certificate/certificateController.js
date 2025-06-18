@@ -3,16 +3,24 @@ const path = require('path');
 
 async function generateCertificateHandler(req, res) {
   try {
-    const data = req.body; // Assuming JSON body parser is used
-    
-    if (!data) {
-      return res.status(400).json({ error: 'No data provided' });
+    const data = req.body;
+
+    if (!data || !data.studentName || !data.courseTitle) {
+      return res.status(400).json({ error: 'Invalid certificate data' });
     }
-    await generateCertificatePDF(data);
-    const pdfPath = path.resolve('./certificate.pdf');
-    res.sendFile(pdfPath);
+
+    const fileName = `certificate-${data.studentName.replace(/\s+/g, '_')}-${Date.now()}.pdf`;
+    const outputDir = path.resolve(__dirname, '../Certificates');
+    const outputPath = path.join(outputDir, fileName);
+
+    await generateCertificatePDF(data, outputPath);
+
+    // 📦 Set appropriate headers to force download or preview
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
+    res.sendFile(outputPath);
   } catch (error) {
-    console.error('Error generating certificate PDF:', error);
+    console.error('❌ Error generating certificate PDF:', error);
     res.status(500).json({ error: 'Failed to generate PDF' });
   }
 }

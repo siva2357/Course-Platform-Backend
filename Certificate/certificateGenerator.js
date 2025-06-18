@@ -1,35 +1,45 @@
 const fs = require('fs');
 const puppeteer = require('puppeteer');
 const ejs = require('ejs');
+const path = require('path');
 
-const templatePath = './templates/certificate.ejs';
-const outputPdfPath = './certificate.pdf';  // output PDF filename
-const isLandscape = true;
+const templatePath = path.resolve(__dirname, '../templates/certificate.ejs');
 
-async function generateCertificatePDF(data) {
-  // Read EJS template from file
-  const templateHtml = fs.readFileSync(templatePath, 'utf8');
+async function generateCertificatePDF(data, outputPath) {
+  try {
+    // Ensure output directory exists
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
 
-  // Render the HTML by injecting data object
-  const finalHtml = ejs.render(templateHtml, data);
+    // Read and render EJS template
+    const templateHtml = fs.readFileSync(templatePath, 'utf8');
+    const finalHtml = ejs.render(templateHtml, data);
 
-  // Launch Puppeteer browser
-  const browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
-  const page = await browser.newPage();
+    const browser = await puppeteer.launch({
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-  // Set page content as the rendered HTML
-  await page.setContent(finalHtml, { waitUntil: ['load', 'networkidle0', 'domcontentloaded'] });
+    const page = await browser.newPage();
+    await page.setContent(finalHtml, {
+      waitUntil: ['load', 'domcontentloaded', 'networkidle0']
+    });
 
-  // Generate PDF with options
-  await page.pdf({
-    path: outputPdfPath,
-    format: 'a4',
-    landscape: isLandscape,
-    printBackground: true,
-  });
+    await page.pdf({
+      path: outputPath,
+      format: 'a4',
+      landscape: true,
+      printBackground: true
+    });
 
-  await browser.close();
-  console.log(`PDF generated: ${outputPdfPath}`);
+    await browser.close();
+    console.log(`✅ PDF generated at: ${outputPath}`);
+  } catch (err) {
+    console.error('❌ Failed to generate certificate PDF:', err);
+    throw err; // Let calling function handle the error
+  }
 }
 
 module.exports = generateCertificatePDF;

@@ -46,6 +46,7 @@ const studentAuthRoutes = require('./Authentication/studentRoutes');
 const studentProfileRoutes = require('./ProfileDetails/studentRoutes');
 const purchaseRoutes = require('./Payment/purchaseRoutes');
 const certificateRoutes = require('./Certificate/certificateRoutes');
+const courseTrackingRoutes = require('./courses/courseTrackingRoutes');
 
 
 app.use('/api', instructorAuthRoutes);
@@ -61,9 +62,10 @@ app.use('/api', cartRoutes);
 app.use('/api', wishlistRoutes);
 app.use("/api", purchaseRoutes);
 app.use('/api', certificateRoutes);
+app.use('/api', courseTrackingRoutes);
 
-
-
+const path = require('path');
+app.use('/Certificates', express.static(path.join(__dirname, 'Certificates')));
 
 // --------------------
 // Default Route

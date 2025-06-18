@@ -5,12 +5,12 @@ const lectureSchema = new mongoose.Schema({
   lectureDescription: { type: String},
   lectureContent: { type: String},
    lectureResources: { type: String },
-}, { _id: false });
+});
 
 const sectionSchema = new mongoose.Schema({
   sectionTitle: { type: String},
   lectures: [lectureSchema]
-}, { _id: false });
+});
 
 const courseSchema = new mongoose.Schema({
   landingPage: {
