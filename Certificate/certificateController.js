@@ -1,6 +1,7 @@
-const generateCertificatePDF = require('./certificateGenerator');
 const path = require('path');
+const generateCertificatePDF = require('./certificateGenerator');
 
+// 🔹 (Optional) Generate PDF on backend
 async function generateCertificateHandler(req, res) {
   try {
     const data = req.body;
@@ -15,7 +16,7 @@ async function generateCertificateHandler(req, res) {
 
     await generateCertificatePDF(data, outputPath);
 
-    // 📦 Set appropriate headers to force download or preview
+    // 📦 Set headers to force inline PDF view
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="${fileName}"`);
     res.sendFile(outputPath);
@@ -25,4 +26,10 @@ async function generateCertificateHandler(req, res) {
   }
 }
 
-module.exports = { generateCertificateHandler };
+
+
+
+
+module.exports = {
+  generateCertificateHandler,
+};

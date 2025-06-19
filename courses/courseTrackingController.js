@@ -26,6 +26,7 @@ function calculateProgress(course, tracking) {
 
   tracking.progressPercentage = Math.round((completedCount / totalSections) * 100);
   tracking.isCourseCompleted = tracking.progressPercentage === 100;
+  
 
   console.log(`🧮 Progress updated: ${tracking.progressPercentage}%`);
   return tracking;
@@ -45,41 +46,29 @@ async function markLectureCompleted(req, res) {
       tracking = new CourseTracking({
         courseId,
         completedLectures: [lectureId],
-        userName: userName || 'Student',
       });
     } else if (!tracking.completedLectures.includes(lectureId)) {
       tracking.completedLectures.push(lectureId);
     }
 
+    // Deduplicate
+    tracking.completedLectures = [...new Set(tracking.completedLectures.map(id => id.toString()))];
+
     // Update progress
     calculateProgress(course, tracking);
-    await tracking.save();
 
-    // ✅ Trigger certificate generation if eligible
+    // Auto-issue certificate but DO NOT store path or user
     if (tracking.isCourseCompleted && !tracking.certificateIssued) {
-      const data = {
-        studentName: tracking.userName || 'Student',
-        courseTitle: course.title,
-        issueDate: new Date().toLocaleDateString()
-      };
-
-      const fileName = `certificate-${data.studentName.replace(/\s+/g, '_')}-${Date.now()}.pdf`;
-      const outputPath = path.resolve(`../Certificates/${fileName}`);
-
-      console.log('🎓 Generating certificate:', {
-        studentName: data.studentName,
-        courseTitle: data.courseTitle,
-        outputPath
+      await generateCertificatePDF({
+        studentName: userName, // Used only for certificate generation, not stored
+        courseTitle: course.landingPage.courseTitle,
+        date: new Date().toLocaleDateString()
       });
 
-      await generateCertificatePDF(data, outputPath);
-
-      tracking.certificatePath = `../Certificates/${fileName}`;
-      tracking.certificateIssued = true;
-      await tracking.save();
-
-      console.log('✅ Certificate saved to tracking record');
+      tracking.certificateIssued = true; // ✅ Just mark it as issued
     }
+
+    await tracking.save();
 
     res.status(200).json({ message: 'Lecture marked completed', tracking });
 
@@ -88,6 +77,7 @@ async function markLectureCompleted(req, res) {
     res.status(500).json({ error: 'Server error' });
   }
 }
+
 
 // 📄 Get certificate status
 async function getCertificateStatus(req, res) {
@@ -103,16 +93,9 @@ async function getCertificateStatus(req, res) {
       return res.status(403).json({ message: 'Certificate not eligible yet' });
     }
 
-    if (!tracking.certificatePath) {
-      return res.status(500).json({ message: 'Certificate not generated yet' });
-    }
-
-    console.log('📄 Certificate path:', tracking.certificatePath);
-
     return res.status(200).json({
       eligible: true,
       message: 'Certificate available',
-      certificateUrl: tracking.certificatePath
     });
 
   } catch (err) {
@@ -121,23 +104,52 @@ async function getCertificateStatus(req, res) {
   }
 }
 
+
 // 📊 Get course progress
 async function getCourseProgress(req, res) {
   try {
     const { courseId } = req.params;
+
     const tracking = await CourseTracking.findOne({ courseId });
+    if (!tracking) return res.status(404).json({ message: "No tracking data" });
 
-    if (!tracking) {
-      return res.status(404).json({ message: 'No tracking data' });
-    }
+    const course = await Course.findById(courseId);
+    if (!course) return res.status(404).json({ message: "Course not found" });
 
-    res.status(200).json(tracking);
+    // 🧠 Map completed lecture & section titles
+    const completedLectureTitles = [];
+    const completedSectionTitles = [];
+
+    course.curriculum.sections.forEach(section => {
+      if (tracking.completedSections.includes(section._id.toString())) {
+        completedSectionTitles.push(section.sectionTitle);
+      }
+
+      section.lectures.forEach(lecture => {
+        if (tracking.completedLectures.includes(lecture._id.toString())) {
+          completedLectureTitles.push(lecture.lectureTitle);
+        }
+      });
+    });
+
+res.status(200).json({
+    courseTitle: course.landingPage.courseTitle, // ✅ include course title
+    progressPercentage: tracking.progressPercentage,
+    isCourseCompleted: tracking.isCourseCompleted,
+    certificateIssued: tracking.certificateIssued,
+    completedLectureTitles,
+    completedSectionTitles
+});
+
+
 
   } catch (err) {
-    console.error('❌ Error fetching progress:', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('❌ Error fetching course progress:', err);
+    res.status(500).json({ error: "Server error" });
   }
 }
+
+
 
 // ✅ Export all handlers
 module.exports = {
