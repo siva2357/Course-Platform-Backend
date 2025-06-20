@@ -24,19 +24,20 @@ exports.getWishlist = async (req, res) => {
   try {
     const wishListItems = await Wishlist.find().populate({
       path: 'courseId',
-      select: 'landingPage.courseTitle landingPage.courseCategory landingPage.courseThumbnail landingPage.courseDescription price.amount'
+      select: 'landingPage price' // ✅ only top-level fields
     });
 
     const flattenedItems = wishListItems.map(item => {
       const course = item.courseId;
+
       return {
         _id: item._id,
         addedAt: item.addedAt,
-        courseTitle: course.landingPage.courseTitle || '',
-        courseCategory: course.landingPage.courseCategory || '',
-        courseThumbnail: course.landingPage.courseThumbnail || '',
-        courseDescription: course.landingPage.courseDescription || '',
-        amount: course.price.amount || 0
+        courseTitle: course?.landingPage?.courseTitle || '',
+        courseCategory: course?.landingPage?.courseCategory || '',
+        courseThumbnail: course?.landingPage?.courseThumbnail || '',
+        courseDescription: course?.landingPage?.courseDescription || '',
+        amount: course?.price?.amount || 0
       };
     });
 
@@ -46,6 +47,7 @@ exports.getWishlist = async (req, res) => {
     });
 
   } catch (err) {
+    console.error('❌ Failed to fetch wishlist:', err);
     res.status(500).json({ error: 'Failed to fetch wishlist' });
   }
 };
