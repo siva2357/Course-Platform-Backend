@@ -1,14 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const cartController = require('./cartController');
+const { identifier } = require('../Middleware/identification');
 
-// Route to add course to cart (Course ID passed in body)
-router.post('/cart/add', cartController.addToCart);
-
-// Route to get all items in the cart
-router.get('/cart', cartController.getCart);
-
-// Route to remove item from cart (Item ID passed in the URL)
-router.delete('/cart/delete/:id', cartController.removeFromCart);
+router.post('/cart/add', identifier, cartController.addToCart);
+router.get('/cart', identifier, cartController.getCart);
+router.delete('/cart/delete/:id', identifier, cartController.removeFromCart);
 
 module.exports = router;

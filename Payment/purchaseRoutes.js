@@ -1,21 +1,26 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const paymentController = require('./purchaseController');
+const controller = require("./purchaseController");
+const { identifier } = require("../Middleware/identification");
+
+// Payment
+router.post("/createPaymentOrder", identifier, controller.createPaymentOrder);
+router.post("/validatePayment", identifier, controller.validatePayment);
+router.post("/purchase/store", identifier, controller.storePurchase);
+router.patch("/purchase/:purchaseId/refund", identifier, controller.refundPurchase);
+router.get('/purchase/order/:orderId', identifier, controller.getPurchaseByOrderId);
+
+// Student
+router.get("/student/purchase-history", identifier, controller.getStudentPurchaseHistory);
+router.patch("/purchase/student/:purchaseId/refund", identifier, controller.studentRefundPurchase);
+
+// Instructor
+router.get("/instructor/revenue", identifier, controller.getInstructorRevenue);
+// Admin
+router.get("/admin/purchases", identifier, controller.getAdminPurchaseSummary);
 
 
-router.post("/createPaymentOrder", paymentController.createPaymentOrder);
-router.post("/validatePayment", paymentController.validatePayment);
-// Fetch purchase by Razorpay Order ID
-router.get('/purchase/order/:orderId', paymentController.getPurchaseByOrderId);
+router.post('/check-access',identifier, controller.hasAccessToCourse); // POST /api/purchase/check-access
 
-// Fetch all purchases for a course (admin)
-router.get('/admin/purchases/course/:courseId', paymentController.getAllPurchasesByCourse);
-
-router.get('/admin/purchases', paymentController.getPurchaseSummaryGroupedByCourse);
-router.post('/purchase/store', paymentController.storePurchase);
-
-router.patch('/purchase/:purchaseId/refund', paymentController.refundPurchase);
-router.get('/purchases/courses', paymentController.getAllPurchasedCourses);
-router.post('/check-access', paymentController.hasAccessToCourse); // POST /api/purchase/check-access
 
 module.exports = router;
