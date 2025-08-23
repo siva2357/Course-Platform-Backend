@@ -10,7 +10,7 @@ const app = express(); // ✅ Declare app at the top
 app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), require('./Payment/webHookController'));
 
 app.use(cors({
-    origin: ['http://localhost:4200'],
+    origin: ['http://localhost:4100'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
 }));

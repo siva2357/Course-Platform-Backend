@@ -1,7 +1,9 @@
 const path = require('path');
 const generateCertificatePDF = require('./certificateGenerator');
 
-// 🔹 (Optional) Generate PDF on backend
+
+
+
 async function generateCertificateHandler(req, res) {
   try {
     const data = req.body;
@@ -25,10 +27,6 @@ async function generateCertificateHandler(req, res) {
     res.status(500).json({ error: 'Failed to generate PDF' });
   }
 }
-
-
-
-
 
 module.exports = {
   generateCertificateHandler,
