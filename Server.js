@@ -22,13 +22,14 @@ app.use(express.urlencoded({ extended: true }));
 // --------------------
 // Database Connection
 // --------------------
-const mongoUri = process.env.MONGO_URI_LOCAL;
+const mongoUri = process.env.MONGO_URI || process.env.MONGO_URI_LOCAL;
+
 mongoose.connect(mongoUri)
-    .then(() => console.log("✅ Database connected"))
-    .catch(err => {
-        console.error("❌ MongoDB connection error:", err);
-        process.exit(1);
-    });
+.then(() => console.log("✅ Database connected"))
+.catch(err => {
+    console.error("❌ MongoDB connection error:", err);
+    process.exit(1);
+});
 
 // --------------------
 // Other Routes
