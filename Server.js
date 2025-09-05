@@ -10,7 +10,7 @@ const app = express(); // ✅ Declare app at the top
 app.post('/api/payment/webhook', express.raw({ type: 'application/json' }), require('./Payment/webHookController'));
 
 app.use(cors({
-    origin: ['http://localhost:4100'],
+    origin: ['http://localhost:4200', 'https://course-platform-247f5.web.app'],
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
 }));
@@ -77,7 +77,7 @@ app.get('/', (req, res) => {
 // --------------------
 // Start Server
 // --------------------
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3200;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server started on port ${PORT}`);
 });
