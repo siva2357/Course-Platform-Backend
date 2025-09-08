@@ -11,11 +11,7 @@ const lectureSchema = new mongoose.Schema({
   lectureTitle: { type: String },
   lectureDescription: { type: String },
   lectureDuration: { type: String, default: "0m" }, 
-  lectureContent: [contentItemSchema],
-  lectureResources: [{
-    fileName: { type: String, required: true },
-    url: { type: String, required: true }
-  }]
+  lectureContent: [{type:String}],
 });
 
 const sectionSchema = new mongoose.Schema({

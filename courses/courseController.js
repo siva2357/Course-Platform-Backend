@@ -55,17 +55,6 @@ exports.createCourse = async (req, res) => {
 };
 
 
-// // Get full course
-// exports.getCourse = async (req, res) => {
-//   try {
-//     const course = await verifyInstructorOwnership(req.params.id, req, res);
-//     if (!course || res.headersSent) return;
-//     res.json(course);
-//   } catch (err) {
-//     res.status(500).json({ message: 'Error fetching course', error: err.message });
-//   }
-// };
-
 
 exports.getCourse = async (req, res) => {
   try {

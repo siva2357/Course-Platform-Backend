@@ -164,13 +164,12 @@ exports.getStudentHeaderInfo = async (req, res) => {
     }
 
     const headerInfo = {
-      profile: {
         fullName: student.registrationDetails.fullName,
+         userName: studentProfile.profileDetails.userName,
         profilePicture: {
           fileName: studentProfile.profileDetails.profilePicture?.fileName || null,
           url: studentProfile.profileDetails.profilePicture?.url || null
         }
-      }
     };
 
     return res.status(200).json(headerInfo);
