@@ -4,7 +4,7 @@ const lectureSchema = new mongoose.Schema({
   lectureTitle: { type: String },
   lectureDescription: { type: String },
   lectureDuration: { type: String, default: "0m" }, 
-  lectureContent: [{type:String}],
+  lectureContent: [{ type: String }],
 });
 
 const sectionSchema = new mongoose.Schema({
@@ -14,17 +14,19 @@ const sectionSchema = new mongoose.Schema({
 });
 
 const courseSchema = new mongoose.Schema({
-createdById: {
-  type: mongoose.Schema.Types.ObjectId,
-  required: true,
-  refPath: 'userRole' // ✅ dynamic reference based on userRole
-},
-userRole: {
-  type: String,
-  required: true,
-  enum: ['instructor', 'student', 'admin'] // ✅ must match your model names
-},
+  createdById: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+    ref: 'Instructor',  // ✅ now strictly tied to Instructor model
+  },
 
+  // 🔒 No need for dynamic role anymore, force instructor only
+  userRole: {
+    type: String,
+    default: "instructor",
+    enum: ["instructor"],
+    required: true
+  },
 
   landingPage: {
     courseTitle: { type: String },
@@ -55,7 +57,8 @@ userRole: {
     enum: ["Pending", "Published", "Rejected", "Draft"],
     default: "Draft"
   },
-    createdByName: {
+
+  createdByName: {
     type: String,
     required: true
   },
@@ -63,8 +66,7 @@ userRole: {
   totalDuration: {
     type: String,
     default: "0m"
-  },
-
+  }
 
 }, { timestamps: true });
 

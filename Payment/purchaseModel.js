@@ -5,12 +5,11 @@ const purchaseSchema = new mongoose.Schema({
   courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
   courseTitle: { type: String, required: true },
 
-  purchasedById: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    refPath: "userRole"
-  },
-  userRole: { type: String, enum: ["student", "instructor", "admin"], required: true },
+purchasedById: {
+  type: mongoose.Schema.Types.ObjectId,
+  required: true,
+  ref: "Student" // assuming your student model is named "Student"
+},
 
   paymentId: { type: String, unique: true, sparse: true },
   orderId: { type: String, unique: true, sparse: true },

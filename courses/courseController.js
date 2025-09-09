@@ -4,25 +4,6 @@ const Purchase = require('../Payment/purchaseModel');
 const CourseTracking = require('./courseTrackingModel');
 
 
-async function verifyInstructorOwnership(courseId, req, res) {
-  const course = await Course.findById(courseId);
-  if (!course) {
-    res.status(404).json({ message: 'Course not found' });
-    return null;
-  }
-
-  if (
-    req.user.role !== 'instructor' ||
-course.createdById.toString() !== req.user.userId.toString()
-  ) {
-    res.status(403).json({ message: 'Access denied: Only the instructor who created the course can access this' });
-    return null;
-  }
-
-  return course;
-}
-
-
 
 // Create course
 exports.createCourse = async (req, res) => {
@@ -243,7 +224,6 @@ exports.submitForReview = async (req, res) => {
 
 
 
-// Publish course (Pending -> Published)
 exports.verifyCourse = async (req, res) => {
   try {
     if (req.user.userRole !== 'Admin') {
@@ -269,8 +249,6 @@ exports.verifyCourse = async (req, res) => {
 };
 
 
-// Archive course (Published -> Archived)
-// Reject course (Pending -> Rejected)
 exports.rejectCourse = async (req, res) => {
   try {
     if (req.user.userRole !== 'Admin') {
@@ -370,8 +348,6 @@ exports.getMyCoursesForStudent = async (req, res) => {
   }
 };
 
-
-
 exports.getMyCoursesForStudent = async (req, res) => {
   try {
     const studentId = req.user.userId;
@@ -437,8 +413,6 @@ exports.getMyCoursesForStudent = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch student courses', error: err.message });
   }
 };
-
-
 
 exports.getInstructorCourseLearnersReport = async (req, res) => {
   const instructorId = req.user?.userId;
@@ -630,7 +604,6 @@ exports.getInstructorRecentPurchases = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch recent purchases" });
   }
 };
-
 
 exports.getInstructorChartAnalytics = async (req, res) => {
   const instructorId = req.user?.userId;

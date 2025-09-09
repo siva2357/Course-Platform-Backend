@@ -16,8 +16,7 @@ router.patch("/purchase/student/:purchaseId/refund", identifier, controller.stud
 
 // Instructor
 router.get("/instructor/revenue", identifier, controller.getInstructorRevenue);
-// Admin
-router.get("/admin/purchases", identifier, controller.getAdminPurchaseSummary);
+
 
 
 router.post('/check-access',identifier, controller.hasAccessToCourse); // POST /api/purchase/check-access

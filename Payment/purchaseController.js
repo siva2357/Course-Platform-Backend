@@ -404,45 +404,77 @@ exports.getInstructorRevenue = async (req, res) => {
 
 
 
-
-// 📌 Admin purchase summary
 exports.getAdminPurchaseSummary = async (req, res) => {
   try {
-    const summary = await Purchase.aggregate([
-      {
-        $group: {
-          _id: "$courseId",
-          totalAmount: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, "$amount", 0] } },
-          totalRefunded: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, "$amount", 0] } },
-          totalRevenueForInstructor: {
-            $sum: { $cond: [{ $eq: ["$status", "purchased"] }, "$revenueForInstructor", 0] }
-          }
+    const userRole = req.user?.role;
+
+    if (!userRole) {
+      return res.status(401).json({ message: "Unauthorized: missing user role" });
+    }
+
+    if (userRole.toLowerCase() !== "admin") {
+      return res.status(403).json({ message: "Access denied: only admins allowed" });
+    }
+
+    const purchases = await Purchase.find()
+      .populate({
+        path: 'courseId',
+        select: 'landingPage.courseTitle landingPage.courseThumbnail landingPage.courseCategory status createdById createdByName createdAt',
+        populate: {
+          path: 'createdById',            // populate instructor for email
+          select: 'registrationDetails'   // only get registrationDetails (fullName & email)
         }
-      },
-      {
-        $lookup: {
-          from: "courses",
-          localField: "_id",
-          foreignField: "_id",
-          as: "course"
-        }
-      },
-      { $unwind: "$course" },
-      {
-        $project: {
-          courseId: "$course._id",
-          courseTitle: "$course.landingPage.courseTitle",
-          totalAmount: 1,
-          totalRefunded: 1,
-          totalRevenueForInstructor: 1
-        }
-      }
-    ]);
-    res.status(200).json({ total: summary.length, data: summary });
+      })
+      .populate({
+        path: 'purchasedById',
+        select: 'registrationDetails'
+      });
+
+    const result = purchases.map(p => {
+      const isRefunded = p.status === 'refunded';
+      const isNonRefundable = p.status === 'non-refundable';
+      const isEligibleForRefund = p.refundableUntil && new Date() <= new Date(p.refundableUntil);
+
+      const course = p.courseId;
+      const student = p.purchasedById;
+      const instructor = course?.createdById;
+
+      return {
+        purchaseId: p._id,
+        status: p.status,
+        statusLabel: isRefunded
+          ? 'Refunded'
+          : isNonRefundable
+            ? 'Non-Refundable'
+            : isEligibleForRefund
+              ? 'Eligible for Refund'
+              : 'Not Eligible for Refund',
+        amount: p.amount,
+        purchasedAt: p.purchasedAt,
+
+        // Course info
+        courseId: course?._id || '',
+        courseTitle: course?.landingPage?.courseTitle || '',
+        courseThumbnail: course?.landingPage?.courseThumbnail || '',
+        courseCategory: course?.landingPage?.courseCategory || '',
+        courseInstructorName: instructor?.registrationDetails?.fullName || course?.createdByName || '',
+        courseInstructorEmail: instructor?.registrationDetails?.email || '',
+
+        // Student info
+        studentId: student?._id || '',
+        studentName: student?.registrationDetails?.fullName || '',
+        studentEmail: student?.registrationDetails?.email || ''
+      };
+    });
+
+    res.status(200).json({ success: true, total: result.length, data: result });
+
   } catch (err) {
-    res.status(500).json({ error: "Admin summary failed" });
+    console.error("❌ Error fetching admin purchase history:", err);
+    res.status(500).json({ message: "Failed to load purchases", error: err.message });
   }
 };
+
 
 
 
