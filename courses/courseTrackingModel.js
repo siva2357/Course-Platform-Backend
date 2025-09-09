@@ -1,58 +1,39 @@
+// courseTrackingModel.js
 const mongoose = require("mongoose");
 
-// 🔹 Track each content item inside a lecture
+// Content tracking
 const contentStatusSchema = new mongoose.Schema({
-  _id: { type: mongoose.Schema.Types.ObjectId }, // Content ID from course
+  _id: { type: mongoose.Schema.Types.ObjectId },
   title: String,
-  type: String,         // video, text, etc.
-  url: String,          // Video or file URL
-  value: String,        // Text value (if type === 'text')
-  status: {
-    type: String,
-    enum: ["Pending", "Completed"],
-    default: "Pending"
-  }
+  type: String,
+  url: String,
+  value: String,
+  status: { type: String, enum: ["Pending", "Completed"], default: "Pending" }
 }, { _id: false });
 
-// 🔹 Lecture tracking includes duration and description
+// Lecture tracking
 const lectureStatusSchema = new mongoose.Schema({
   _id: { type: mongoose.Schema.Types.ObjectId },
   lectureTitle: String,
   lectureDescription: String,
   lectureDuration: String,
-  status: {
-    type: String,
-    enum: ["Pending", "Completed"],
-    default: "Pending"
-  },
+  status: { type: String, enum: ["Pending", "Completed"], default: "Pending" },
   contents: [contentStatusSchema]
 }, { _id: false });
 
-// 🔹 Section tracking includes duration
+// Section tracking
 const sectionStatusSchema = new mongoose.Schema({
   _id: { type: mongoose.Schema.Types.ObjectId },
   sectionTitle: String,
   sectionDuration: String,
-  status: {
-    type: String,
-    enum: ["Pending", "In Progress", "Completed"],
-    default: "Pending"
-  },
+  status: { type: String, enum: ["Pending", "Completed"], default: "Pending" },
   lectures: [lectureStatusSchema]
 }, { _id: false });
 
-// 🔹 Course tracking per student
+// Main tracking
 const courseTrackingSchema = new mongoose.Schema({
-  studentId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Student",
-    required: true
-  },
-  courseId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Course",
-    required: true
-  },
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student", required: true },
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
   curriculum: [sectionStatusSchema],
   progressPercentage: { type: Number, default: 0 },
   isCourseCompleted: { type: Boolean, default: false },

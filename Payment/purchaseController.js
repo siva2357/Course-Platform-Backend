@@ -319,7 +319,7 @@ exports.getInstructorRevenue = async (req, res) => {
   try {
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // last 24 hours
 
-    // 🔄 Base aggregation pipeline
+    // Base aggregation pipeline
     const basePipeline = [
       {
         $match: {
@@ -343,7 +343,7 @@ exports.getInstructorRevenue = async (req, res) => {
       },
       {
         $lookup: {
-          from: 'students', // ✅ replace with correct student collection name if different
+          from: 'students', // adjust if your student collection has a different name
           localField: 'purchasedById',
           foreignField: '_id',
           as: 'student'
@@ -352,10 +352,10 @@ exports.getInstructorRevenue = async (req, res) => {
       { $unwind: { path: '$student', preserveNullAndEmptyArrays: true } },
       {
         $project: {
-          studentName: '$student.name',
-          studentEmail: '$student.email',
+          studentName: { $ifNull: ['$student.registrationDetails.fullName', 'Unknown'] },
+          studentEmail: { $ifNull: ['$student.registrationDetails.email', 'Unknown'] },
           courseTitle: '$course.landingPage.courseTitle',
-          amount: '$revenueForInstructor',
+          amount: { $subtract: ['$amount', '$platformFee'] }, // revenue for instructor
           purchasedAt: 1,
           status: {
             $cond: [{ $eq: ['$status', 'refunded'] }, 'Refunded', 'Paid']
@@ -365,19 +365,24 @@ exports.getInstructorRevenue = async (req, res) => {
       { $sort: { purchasedAt: -1 } }
     ];
 
-    // 🔍 Try recent first
+    // Fetch recent purchases
     let recent = await Purchase.aggregate([...basePipeline]);
     let isFallback = false;
 
-    // 🔄 If no recent purchases, fallback to latest 5 overall
+    // Fallback if no recent purchases
     if (recent.length === 0) {
       isFallback = true;
 
-      const fallbackPipeline = [...basePipeline];
-      // Remove the 24hr filter for fallback
+      const fallbackPipeline = [
+        ...basePipeline.map(stage => ({ ...stage })), // deep copy to avoid mutation
+      ];
+
+      // Remove the 24hr filter from the first $match
       fallbackPipeline[0].$match = {
         status: { $in: ['purchased', 'refunded'] }
       };
+
+      // Limit to latest 5
       fallbackPipeline.push({ $limit: 5 });
 
       recent = await Purchase.aggregate(fallbackPipeline);

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { identifier } = require('../middleware/identification');
+const { identifier } = require('../Middleware/identification');
 const { signout,getAdminById,getAdminProfileById} = require('./adminController');
 const userProfileController = require('../Admin/userProfileController'); // path as needed
 const jobPostsController = require('../Admin/jobPostsController'); // path as needed

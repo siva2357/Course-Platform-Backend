@@ -463,11 +463,13 @@ exports.getInstructorCourseLearnersReport = async (req, res) => {
     });
 
     // 2. Get course tracking for all these courses
-    const trackingRecords = await CourseTracking.find({
-      courseId: { $in: [...courseMap.keys()] }
-    })
-      .populate('studentId', 'name email')
-      .populate('courseId', 'landingPage.courseTitle');
+const trackingRecords = await CourseTracking.find({
+  courseId: { $in: [...courseMap.keys()] }
+})
+.populate('studentId', 'registrationDetails.fullName registrationDetails.email')
+.populate('courseId', 'landingPage.courseTitle');
+
+
 
     // 3. Append learners based on course tracking
     trackingRecords.forEach(record => {
@@ -481,13 +483,15 @@ exports.getInstructorCourseLearnersReport = async (req, res) => {
           ? 'Completed'
           : 'In Progress';
 
-        courseEntry.learners.push({
-          studentName: record.studentId?.name || 'Unknown',
-          studentEmail: record.studentId?.email || 'Unknown',
-          status,
-          startedOn: record.createdAt || null,
-          completedOn: record.isCourseCompleted ? record.updatedAt : null
-        });
+courseEntry.learners.push({
+  studentName: record.studentId?.registrationDetails?.fullName || 'Unknown',
+  studentEmail: record.studentId?.registrationDetails?.email || 'Unknown',
+  status,
+  startedOn: record.createdAt || null,
+  completedOn: record.isCourseCompleted ? record.updatedAt : null
+});
+
+
 
         courseEntry.totalLearners = courseEntry.learners.length;
       }
@@ -506,74 +510,119 @@ exports.getInstructorCourseLearnersReport = async (req, res) => {
 
 
 
-
 exports.getInstructorRecentPurchases = async (req, res) => {
   const instructorId = req.user?.userId;
   const role = req.user?.role;
 
-  if (!instructorId || role !== 'instructor') {
+  if (!instructorId || role !== "instructor") {
     return res.status(403).json({ error: "Unauthorized" });
   }
 
   try {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // last 24 hours
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // last 24h
 
-    // Try purchases from the last 24 hours
-    let recent = await Purchase.find({
-      instructorId,
-  status: { $in: ['purchased', 'refunded'] },  // ✅ include both
-      purchasedAt: { $gte: since }
-    })
-      .populate({ path: 'studentId', select: 'name email' })
-      .populate({ path: 'courseId', select: 'landingPage.courseTitle' })
-      .sort({ purchasedAt: -1 });
+    const baseMatch = { status: { $in: ["purchased", "refunded"] } };
 
-    // If none in 24 hrs, try fallback to latest 5 purchases
+    const recent = await Purchase.aggregate([
+      // Join with courses
+      {
+        $lookup: {
+          from: "courses",
+          localField: "courseId",
+          foreignField: "_id",
+          as: "course"
+        }
+      },
+      { $unwind: "$course" },
+      // Join with students
+      {
+        $lookup: {
+          from: "students", // adjust if your student collection has a different name
+          localField: "purchasedById",
+          foreignField: "_id",
+          as: "student"
+        }
+      },
+      { $unwind: { path: "$student", preserveNullAndEmptyArrays: true } },
+      // Match instructor + recent 24h + status
+      {
+        $match: {
+          "course.createdById": new mongoose.Types.ObjectId(instructorId),
+          purchasedAt: { $gte: since },
+          ...baseMatch
+        }
+      },
+      {
+        $project: {
+          studentId: "$purchasedById",
+          studentName: { $ifNull: ["$student.registrationDetails.fullName", "Unknown"] },
+          studentEmail: { $ifNull: ["$student.registrationDetails.email", "Unknown"] },
+          courseTitle: "$courseTitle",
+          amount: { $subtract: ["$amount", "$platformFee"] },
+          purchasedAt: 1,
+          status: { $cond: [{ $eq: ["$status", "refunded"] }, "Refunded", "Paid"] }
+        }
+      },
+      { $sort: { purchasedAt: -1 } },
+      { $limit: 5 }
+    ]);
+
     let isFallback = false;
+
     if (recent.length === 0) {
-      const allPurchases = await Purchase.find({
-        instructorId,
-        status: 'purchased'
-      });
-
-      if (allPurchases.length === 0) {
-        // No purchases recorded at all
-        return res.status(200).json({
-          message: "No purchases recorded yet.",
-          purchases: [],
-          isFallback: false
-        });
-      }
-
-      // Purchases exist but not recently
-      recent = await Purchase.find({
-        instructorId,
-        status: 'purchased'
-      })
-        .populate({ path: 'studentId', select: 'name email' })
-        .populate({ path: 'courseId', select: 'landingPage.courseTitle' })
-        .sort({ purchasedAt: -1 })
-        .limit(5);
-
       isFallback = true;
+
+      const fallback = await Purchase.aggregate([
+        {
+          $lookup: {
+            from: "courses",
+            localField: "courseId",
+            foreignField: "_id",
+            as: "course"
+          }
+        },
+        { $unwind: "$course" },
+        {
+          $lookup: {
+            from: "students",
+            localField: "purchasedById",
+            foreignField: "_id",
+            as: "student"
+          }
+        },
+        { $unwind: { path: "$student", preserveNullAndEmptyArrays: true } },
+        {
+          $match: {
+            "course.createdById": new mongoose.Types.ObjectId(instructorId),
+            ...baseMatch
+          }
+        },
+        {
+          $project: {
+            studentId: "$purchasedById",
+            studentName: { $ifNull: ["$student.registrationDetails.fullName", "Unknown"] },
+            studentEmail: { $ifNull: ["$student.registrationDetails.email", "Unknown"] },
+            courseTitle: "$courseTitle",
+            amount: { $subtract: ["$amount", "$platformFee"] },
+            purchasedAt: 1,
+            status: { $cond: [{ $eq: ["$status", "refunded"] }, "Refunded", "Paid"] }
+          }
+        },
+        { $sort: { purchasedAt: -1 } },
+        { $limit: 5 }
+      ]);
+
+      return res.status(200).json({
+        purchases: fallback,
+        isFallback: true,
+        message: "No recent purchases in last 24 hours. Showing latest overall."
+      });
     }
 
-const purchases = recent.map(entry => ({
-  studentName: entry.studentId?.name || 'Unknown',
-  studentEmail: entry.studentId?.email || 'Not Provided',
-  courseTitle: entry.courseId?.landingPage?.courseTitle || 'Untitled Course',
-  amount: entry.revenueForInstructor || 0,
-  purchasedAt: entry.purchasedAt,
-  status: entry.status === 'refunded' ? 'Refunded' : 'Paid'  // ✅ status included
-}));
-
-
-    res.status(200).json({
-      purchases,
-      isFallback,
-      message: isFallback
-        ? "No recent purchases in last 24 hours. Showing latest overall."
-        : "Recent purchases from last 24 hours."
+    return res.status(200).json({
+      purchases: recent,
+      isFallback: false,
+      message: "Recent purchases from last 24 hours."
     });
 
   } catch (err) {
@@ -581,8 +630,6 @@ const purchases = recent.map(entry => ({
     res.status(500).json({ error: "Failed to fetch recent purchases" });
   }
 };
-
-
 
 
 exports.getInstructorChartAnalytics = async (req, res) => {
@@ -596,12 +643,7 @@ exports.getInstructorChartAnalytics = async (req, res) => {
   try {
     // CATEGORY STATS
     const categoryStats = await Course.aggregate([
-      {
-        $match: {
-          createdById: new mongoose.Types.ObjectId(instructorId),
-          userRole: 'instructor'
-        }
-      },
+      { $match: { createdById: new mongoose.Types.ObjectId(instructorId) } },
       {
         $lookup: {
           from: 'purchases',
@@ -610,19 +652,8 @@ exports.getInstructorChartAnalytics = async (req, res) => {
           as: 'purchases'
         }
       },
-      {
-        $project: {
-          category: "$landingPage.courseCategory",
-          courseId: "$_id",
-          purchases: 1
-        }
-      },
-      {
-        $unwind: {
-          path: "$purchases",
-          preserveNullAndEmptyArrays: true
-        }
-      },
+      { $project: { category: "$landingPage.courseCategory", courseId: "$_id", purchases: 1 } },
+      { $unwind: { path: "$purchases", preserveNullAndEmptyArrays: true } },
       {
         $group: {
           _id: "$category",
@@ -630,18 +661,14 @@ exports.getInstructorChartAnalytics = async (req, res) => {
             $sum: {
               $cond: [
                 { $eq: ["$purchases.status", "purchased"] },
-                "$purchases.revenueForInstructor",
+                { $subtract: ["$purchases.amount", "$purchases.platformFee"] },
                 0
               ]
             }
           },
           totalStudents: {
             $addToSet: {
-              $cond: [
-                { $eq: ["$purchases.status", "purchased"] },
-                "$purchases.studentId",
-                null
-              ]
+              $cond: [{ $eq: ["$purchases.status", "purchased"] }, "$purchases.purchasedById", null]
             }
           },
           totalCourses: { $addToSet: "$courseId" }
@@ -651,15 +678,7 @@ exports.getInstructorChartAnalytics = async (req, res) => {
         $project: {
           category: "$_id",
           totalRevenue: 1,
-          totalStudents: {
-            $size: {
-              $filter: {
-                input: "$totalStudents",
-                as: "student",
-                cond: { $ne: ["$$student", null] }
-              }
-            }
-          },
+          totalStudents: { $size: { $filter: { input: "$totalStudents", as: "s", cond: { $ne: ["$$s", null] } } } },
           totalCourses: { $size: "$totalCourses" },
           _id: 0
         }
@@ -668,12 +687,7 @@ exports.getInstructorChartAnalytics = async (req, res) => {
 
     // PERFORMANCE STATS
     const performanceStats = await Course.aggregate([
-      {
-        $match: {
-          createdById: new mongoose.Types.ObjectId(instructorId),
-          userRole: 'instructor'
-        }
-      },
+      { $match: { createdById: new mongoose.Types.ObjectId(instructorId) } },
       {
         $lookup: {
           from: 'purchases',
@@ -682,12 +696,7 @@ exports.getInstructorChartAnalytics = async (req, res) => {
           as: 'purchases'
         }
       },
-      {
-        $project: {
-          title: "$landingPage.courseTitle",
-          purchases: 1
-        }
-      },
+      { $project: { title: "$landingPage.courseTitle", purchases: 1 } },
       {
         $addFields: {
           revenue: {
@@ -695,45 +704,23 @@ exports.getInstructorChartAnalytics = async (req, res) => {
               $map: {
                 input: "$purchases",
                 as: "p",
-                in: {
-                  $cond: [
-                    { $eq: ["$$p.status", "purchased"] },
-                    "$$p.revenueForInstructor",
-                    0
-                  ]
-                }
+                in: { $cond: [{ $eq: ["$$p.status", "purchased"] }, { $subtract: ["$$p.amount", "$$p.platformFee"] }, 0] }
               }
             }
           },
-          students: {
-            $size: {
-              $filter: {
-                input: "$purchases",
-                as: "p",
-                cond: { $eq: ["$$p.status", "purchased"] }
-              }
-            }
-          }
+          students: { $size: { $filter: { input: "$purchases", as: "p", cond: { $eq: ["$$p.status", "purchased"] } } } }
         }
       },
-      {
-        $project: {
-          title: 1,
-          revenue: 1,
-          students: 1
-        }
-      }
+      { $project: { title: 1, revenue: 1, students: 1 } }
     ]);
 
     return res.json({ categoryStats, performanceStats });
+
   } catch (error) {
     console.error("Chart analytics error:", error.message);
     res.status(500).json({ error: "Failed to fetch chart data" });
   }
 };
-
-
-
 
 exports.getInstructorSummaryAnalytics = async (req, res) => {
   const instructorId = req.user?.userId;
@@ -749,116 +736,102 @@ exports.getInstructorSummaryAnalytics = async (req, res) => {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfYear = new Date(now.getFullYear(), 0, 1);
 
-    const matchBase = {
-      instructorId: new mongoose.Types.ObjectId(instructorId),
-      status: { $in: ['purchased', 'refunded'] }
-    };
+    const matchBase = { status: { $in: ['purchased', 'refunded'] } };
 
- const [all, week, month, year] = await Promise.all([
-  // All time
-Purchase.aggregate([
-  {
-    $match: {
-      status: { $in: ['purchased', 'refunded'] }
-    }
-  },
-  {
-    $lookup: {
-      from: "courses",
-      localField: "courseId",
-      foreignField: "_id",
-      as: "course"
-    }
-  },
-  { $unwind: "$course" },
-  {
-    $match: {
-      "course.createdBy": new mongoose.Types.ObjectId(instructorId) // or createdByName if you're using string
-    }
-  },
-  {
-    $group: {
-      _id: null,
-      totalRevenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, "$revenueForInstructor", 0] } },
-      totalRefunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, "$revenueForInstructor", 0] } },
-      totalOrders: { $sum: 1 },
-      studentSet: { $addToSet: "$purchasedById" }
-    }
-  }
-]),
+    const [all, week, month, year] = await Promise.all([
+      // All time
+      Purchase.aggregate([
+        { $match: matchBase },
+        { $lookup: { from: "courses", localField: "courseId", foreignField: "_id", as: "course" } },
+        { $unwind: "$course" },
+        { $match: { "course.createdById": new mongoose.Types.ObjectId(instructorId) } },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            totalRefunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            totalOrders: { $sum: 1 },
+            studentSet: { $addToSet: "$purchasedById" }
+          }
+        }
+      ]),
 
-  // Weekly
-  Purchase.aggregate([
-    { $match: { ...matchBase, purchasedAt: { $gte: startOfWeek } } },
-    {
-      $group: {
-        _id: null,
-        revenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, "$revenueForInstructor", 0] } },
-        refunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, "$revenueForInstructor", 0] } },
-        orders: { $sum: 1 },
-        studentSet: { $addToSet: "$studentId" }
+      // Weekly
+      Purchase.aggregate([
+        { $match: { ...matchBase, purchasedAt: { $gte: startOfWeek } } },
+        { $lookup: { from: "courses", localField: "courseId", foreignField: "_id", as: "course" } },
+        { $unwind: "$course" },
+        { $match: { "course.createdById": new mongoose.Types.ObjectId(instructorId) } },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            refunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            orders: { $sum: 1 },
+            studentSet: { $addToSet: "$purchasedById" }
+          }
+        }
+      ]),
+
+      // Monthly
+      Purchase.aggregate([
+        { $match: { ...matchBase, purchasedAt: { $gte: startOfMonth } } },
+        { $lookup: { from: "courses", localField: "courseId", foreignField: "_id", as: "course" } },
+        { $unwind: "$course" },
+        { $match: { "course.createdById": new mongoose.Types.ObjectId(instructorId) } },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            refunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            orders: { $sum: 1 },
+            studentSet: { $addToSet: "$purchasedById" }
+          }
+        }
+      ]),
+
+      // Yearly
+      Purchase.aggregate([
+        { $match: { ...matchBase, purchasedAt: { $gte: startOfYear } } },
+        { $lookup: { from: "courses", localField: "courseId", foreignField: "_id", as: "course" } },
+        { $unwind: "$course" },
+        { $match: { "course.createdById": new mongoose.Types.ObjectId(instructorId) } },
+        {
+          $group: {
+            _id: null,
+            revenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            refunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, { $subtract: ["$amount", "$platformFee"] }, 0] } },
+            orders: { $sum: 1 },
+            studentSet: { $addToSet: "$purchasedById" }
+          }
+        }
+      ])
+    ]);
+
+    res.status(200).json({
+      totalRevenue: all[0]?.totalRevenue || 0,
+      totalRefunds: all[0]?.totalRefunds || 0,
+      totalOrders: all[0]?.totalOrders || 0,
+      totalStudents: all[0]?.studentSet?.length || 0,
+      weekly: {
+        revenue: week[0]?.revenue || 0,
+        refunds: week[0]?.refunds || 0,
+        orders: week[0]?.orders || 0,
+        students: week[0]?.studentSet?.length || 0
+      },
+      monthly: {
+        revenue: month[0]?.revenue || 0,
+        refunds: month[0]?.refunds || 0,
+        orders: month[0]?.orders || 0,
+        students: month[0]?.studentSet?.length || 0
+      },
+      yearly: {
+        revenue: year[0]?.revenue || 0,
+        refunds: year[0]?.refunds || 0,
+        orders: year[0]?.orders || 0,
+        students: year[0]?.studentSet?.length || 0
       }
-    }
-  ]),
-
-  // Monthly
-  Purchase.aggregate([
-    { $match: { ...matchBase, purchasedAt: { $gte: startOfMonth } } },
-    {
-      $group: {
-        _id: null,
-        revenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, "$revenueForInstructor", 0] } },
-        refunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, "$revenueForInstructor", 0] } },
-        orders: { $sum: 1 },
-        studentSet: { $addToSet: "$studentId" }
-      }
-    }
-  ]),
-
-  // Yearly
-  Purchase.aggregate([
-    { $match: { ...matchBase, purchasedAt: { $gte: startOfYear } } },
-    {
-      $group: {
-        _id: null,
-        revenue: { $sum: { $cond: [{ $eq: ["$status", "purchased"] }, "$revenueForInstructor", 0] } },
-        refunds: { $sum: { $cond: [{ $eq: ["$status", "refunded"] }, "$revenueForInstructor", 0] } },
-        orders: { $sum: 1 },
-        studentSet: { $addToSet: "$studentId" }
-      }
-    }
-  ])
-]);
-
-
-res.status(200).json({
-  totalRevenue: all[0]?.totalRevenue || 0,
-  totalRefunds: all[0]?.totalRefunds || 0,
-  totalOrders: all[0]?.totalOrders || 0,
-  totalStudents: all[0]?.studentSet?.length || 0,
-
-  weekly: {
-    revenue: week[0]?.revenue || 0,
-    refunds: week[0]?.refunds || 0,
-    orders: week[0]?.orders || 0,
-    students: week[0]?.studentSet?.length || 0
-  },
-
-  monthly: {
-    revenue: month[0]?.revenue || 0,
-    refunds: month[0]?.refunds || 0,
-    orders: month[0]?.orders || 0,
-    students: month[0]?.studentSet?.length || 0
-  },
-
-  yearly: {
-    revenue: year[0]?.revenue || 0,
-    refunds: year[0]?.refunds || 0,
-    orders: year[0]?.orders || 0,
-    students: year[0]?.studentSet?.length || 0
-  }
-});
-
+    });
 
   } catch (err) {
     console.error('Summary Error:', err.message);
