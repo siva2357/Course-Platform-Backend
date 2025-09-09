@@ -4,10 +4,11 @@ const Instructor = require('../Authentication/instructorModel');
 const InstructorProfile = require('../ProfileDetails/instructorProfileModel');
 const Student = require('../Authentication/studentModel');
 const StudentProfile = require('../ProfileDetails/studentProfileModel');
+const Admin = require('../Authentication/adminModel')
 
 require('dotenv').config();
 
-// Login Controller for Instructor and Student
+
 exports.login = async (req, res) => {
   const { email, password } = req.body;
 
@@ -19,29 +20,29 @@ exports.login = async (req, res) => {
     const findUser = async (model, profileModel, role) => {
       const user = await model.findOne({ 'registrationDetails.email': email })
         .select('+registrationDetails.password +registrationDetails.verified');
-      if (user) {
-        const isValidPassword = await bcrypt.compare(password, user.registrationDetails.password);
-        if (!isValidPassword) {
-          return null;
-        }
-        if (!user.registrationDetails.verified) {
-          return { unverified: true };
-        }
+      if (!user) return null;
 
-        // Fetch profile to get firstName and lastName
-        let profile;
-        if (role === 'instructor') {
-          profile = await profileModel.findOne({ instructorId: user._id });
-        } else if (role === 'student') {
-          profile = await profileModel.findOne({ studentId: user._id });
-        }
+      const isValidPassword = await bcrypt.compare(password, user.registrationDetails.password);
+      if (!isValidPassword) return null;
 
-        return { user, profile, role };
+      if (!user.registrationDetails.verified) return { unverified: true };
+
+      let profile = null;
+      if (role === 'admin') {
+        // Admin has no separate profile model
+        profile = null;
+      } else if (role === 'instructor') {
+        profile = await profileModel.findOne({ instructorId: user._id });
+      } else if (role === 'student') {
+        profile = await profileModel.findOne({ studentId: user._id });
       }
-      return null;
+
+      return { user, profile, role };
     };
 
-    let userData = await findUser(Instructor, InstructorProfile, 'instructor') || 
+    // Search for admin first, then instructor, then student
+    let userData = await findUser(Admin, null, 'admin') ||
+                   await findUser(Instructor, InstructorProfile, 'instructor') ||
                    await findUser(Student, StudentProfile, 'student');
 
     if (!userData) {
@@ -49,10 +50,10 @@ exports.login = async (req, res) => {
     }
 
     if (userData.unverified) {
-      return res.status(403).json({ success: false, message: "Email not verified. Please verify your email before logging in." });
+      return res.status(403).json({ success: false, message: "Email not verified." });
     }
 
-    const { user, profile, role} = userData;
+    const { user, profile, role } = userData;
     const fullName = user.registrationDetails.fullName;
 
     const token = jwt.sign({
@@ -66,10 +67,9 @@ exports.login = async (req, res) => {
     user.status = "active";
     await user.save();
 
+    // Profile completion check (admins are always complete)
     let profileComplete = true;
-    if (role === "instructor") {
-      profileComplete = !!(profile && profile.profileDetails);
-    } else if (role === "student") {
+    if (role === "instructor" || role === "student") {
       profileComplete = !!(profile && profile.profileDetails);
     }
 
@@ -90,12 +90,12 @@ exports.login = async (req, res) => {
 
   } catch (error) {
     console.error("Login Error:", error);
-    res.status(500).json({ success: false, message: "An error occurred during login. Please try again." });
+    res.status(500).json({ success: false, message: "An error occurred during login." });
   }
 };
 
 
-// Logout Controller for Instructor and Student
+
 exports.logout = async (req, res) => {
   try {
     if (!req.user) {
@@ -105,7 +105,8 @@ exports.logout = async (req, res) => {
     const { userId, role } = req.user;
 
     let model;
-    if (role === "instructor") model = Instructor;
+    if (role === "admin") model = Admin;
+    else if (role === "instructor") model = Instructor;
     else if (role === "student") model = Student;
     else return res.status(400).json({ success: false, message: "Invalid role" });
 

@@ -51,6 +51,7 @@ mongoose
 // Routes
 // --------------------
 const routes = {
+  admin: require('./Authentication/adminRoutes'),
   auth: require('./Authentication/loginRoutes'),
   instructorAuth: require('./Authentication/instructorRoutes'),
   instructorProfile: require('./ProfileDetails/instructorRoutes'),
