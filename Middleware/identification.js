@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+
 exports.identifier = (req, res, next) => {
   let token = req.headers.authorization || req.cookies['Authorization'];
 
@@ -8,7 +9,6 @@ exports.identifier = (req, res, next) => {
     return res.status(403).json({ success: false, message: 'Unauthorized: No token provided' });
   }
 
-  // Remove "Bearer " prefix if present
   if (token.startsWith('Bearer ')) {
     token = token.slice(7);
   } else {
@@ -17,26 +17,26 @@ exports.identifier = (req, res, next) => {
 
   try {
     const decoded = jwt.verify(token, process.env.TOKEN_SECRET);
+    const { userId, role } = decoded || {};
 
-    if (!decoded?.userId || !decoded?.role) {
+    if (!userId || !role) {
       return res.status(403).json({ success: false, message: 'Unauthorized: Token missing required fields' });
     }
 
-    // Attach user info
-    req.user = decoded;
-
-    // Role-specific ID assignment
-    if (decoded.role === 'instructor') {
-      req.instructorId = decoded.userId;
-    } else if (decoded.role === 'student') {
-      req.studentId = decoded.userId;
-    } else if (decoded.role === 'admin') {
-      req.adminId = decoded.userId;
-    } else {
+    if (!['instructor', 'student', 'admin'].includes(role)) {
       return res.status(403).json({ success: false, message: 'Unauthorized: Invalid role' });
     }
 
-    next(); // Proceed to controller
+    // Role-specific ID attachment
+    req.user = decoded;
+    req[`${role}Id`] = userId;
+
+    // Enforce role for admin routes
+    if (req.path.startsWith('/admin') && role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Unauthorized: Admin access only' });
+    }
+
+    next();
 
   } catch (error) {
     console.error('Token verification error:', error.message);

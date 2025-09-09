@@ -1,12 +1,5 @@
 const mongoose = require("mongoose");
 
-const contentItemSchema = new mongoose.Schema({
-     type: { type: String, required: true },
-    title: { type: String, required: true },
-    url: { type: String, required: function () { return this.type !== 'text'; } },
-    value: { type: String }
-});
-
 const lectureSchema = new mongoose.Schema({
   lectureTitle: { type: String },
   lectureDescription: { type: String },
