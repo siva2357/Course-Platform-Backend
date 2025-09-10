@@ -1,5 +1,5 @@
 const Course = require("../courses/courseModel");
-const { sendNotification } = require("../middleware/notificationHelper");
+const { sendNotification } = require("../Middleware/notificationHelper");
 
 // ✅ Get all courses (for admin review / listing)
 exports.getAllCourses = async (req, res) => {
