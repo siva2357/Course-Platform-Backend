@@ -4,6 +4,24 @@ const Purchase = require('../Payment/purchaseModel');
 const CourseTracking = require('./courseTrackingModel');
 
 
+async function verifyInstructorOwnership(courseId, req, res) {
+  const course = await Course.findById(courseId);
+  if (!course) {
+    res.status(404).json({ message: 'Course not found' });
+    return null;
+  }
+
+  if (
+    req.user.role !== 'instructor' ||
+course.createdById.toString() !== req.user.userId.toString()
+  ) {
+    res.status(403).json({ message: 'Access denied: Only the instructor who created the course can access this' });
+    return null;
+  }
+
+  return course;
+}
+
 
 // Create course
 exports.createCourse = async (req, res) => {
@@ -282,7 +300,16 @@ exports.getPublishedCoursesForStudents = async (req, res) => {
       return res.status(403).json({ message: 'Only students can access published courses' });
     }
 
+    const studentId = req.user.userId;
+
+    // Fetch all published courses
     const courses = await Course.find({ status: 'Published' });
+
+    // Fetch all purchased courses for this student
+    const purchasedCourses = await Purchase.find({ purchasedById: studentId, status: 'purchased' })
+      .select('courseId')
+      .lean();
+    const purchasedCourseIds = purchasedCourses.map(p => String(p.courseId));
 
     const categorized = {};
     for (const course of courses) {
@@ -297,6 +324,7 @@ exports.getPublishedCoursesForStudents = async (req, res) => {
         preview: course.landingPage.coursePreview,
         createdByName: course.createdByName,
         createdAt: course.createdAt,
+        purchased: purchasedCourseIds.includes(String(course._id)) // ✅ true if student already purchased
       });
     }
 
@@ -309,98 +337,59 @@ exports.getPublishedCoursesForStudents = async (req, res) => {
 
 
 
-exports.getMyCoursesForStudent = async (req, res) => {
-  try {
-    const studentId = req.user.userId;
-
-    const purchases = await Purchase.find({
-      purchasedById: studentId,
-      userRole: 'student', // ✅ lowercase
-      status: 'purchased'
-    }).select('courseId');
-
-    const courseIds = purchases.map(p => p.courseId);
-
-    if (courseIds.length === 0) {
-      return res.status(200).json({ success: true, message: 'No courses purchased yet', myCourses: [] });
-    }
-
-    const courses = await Course.find({ _id: { $in: courseIds }, status: 'Published' });
-
-    const myCourses = courses.map(course => ({
-      _id: course._id,
-      title: course.landingPage.courseTitle,
-      description: course.landingPage.courseDescription,
-      thumbnail: course.landingPage.courseThumbnail,
-      preview: course.landingPage.coursePreview,
-      createdByName: course.createdByName,
-      createdAt: course.createdAt,
-    }));
-
-    res.status(200).json({
-      success: true,
-      total: myCourses.length,
-      myCourses
-    });
-  } catch (err) {
-    console.error('❌ Error fetching student my courses:', err);
-    res.status(500).json({ message: 'Failed to fetch student courses', error: err.message });
-  }
-};
 
 exports.getMyCoursesForStudent = async (req, res) => {
   try {
-    const studentId = req.user.userId;
+    const studentId = req.params.studentId || req.user?.userId;
 
-    const purchases = await Purchase.find({
-      purchasedById: studentId,
-      userRole: 'student',
-      status: 'purchased'
-    }).select('courseId');
-
-    const courseIds = purchases.map(p => p.courseId);
-
-    if (courseIds.length === 0) {
-      return res.status(200).json({ success: true, message: 'No courses purchased yet', myCourses: [] });
+    if (!studentId) {
+      return res.status(400).json({ message: 'Student ID is required' });
     }
 
-    // Fetch all published course details
-    const courses = await Course.find({ _id: { $in: courseIds }, status: 'Published' });
+    // Get purchased courses
+    const purchases = await Purchase.find({ purchasedById: studentId, status: 'purchased' })
+      .populate({
+        path: 'courseId',
+        select: 'landingPage courseCategory createdByName createdAt status',
+        match: { status: 'Published' }
+      });
 
-    // Fetch progress records for all purchased courses
+    const courseIds = purchases.map(p => p.courseId?._id).filter(Boolean);
+
+    // Get tracking records
     const trackingRecords = await CourseTracking.find({
       studentId,
       courseId: { $in: courseIds }
     });
 
-    // Create a quick lookup for progress info
     const trackingMap = new Map();
     trackingRecords.forEach(track => {
       trackingMap.set(track.courseId.toString(), {
         progressPercentage: track.progressPercentage,
-        isCourseCompleted: track.isCourseCompleted
+        isCourseCompleted: track.isCourseCompleted,
+        certificateIssued: track.certificateIssued
       });
     });
 
-    // Format final response
-    const myCourses = courses.map(course => {
-      const progress = trackingMap.get(course._id.toString()) || {
-        progressPercentage: 0,
-        isCourseCompleted: false
-      };
-
-      return {
-        _id: course._id,
-        title: course.landingPage.courseTitle,
-        description: course.landingPage.courseDescription,
-        thumbnail: course.landingPage.courseThumbnail,
-        preview: course.landingPage.coursePreview,
-        createdByName: course.createdByName,
-        createdAt: course.createdAt,
-        progressPercentage: progress.progressPercentage,
-        isCourseCompleted: progress.isCourseCompleted
-      };
-    });
+    const myCourses = purchases
+      .filter(p => p.courseId)
+      .map(p => {
+        const track = trackingMap.get(p.courseId._id.toString()) || {};
+        return {
+          purchaseId: p._id,
+          courseId: p.courseId._id,
+          title: p.courseId.landingPage?.courseTitle || '',
+          description: p.courseId.landingPage?.courseDescription || '',
+          thumbnail: p.courseId.landingPage?.courseThumbnail || '',
+          preview: p.courseId.landingPage?.coursePreview || '',
+          category: p.courseId.landingPage?.courseCategory || '',
+          instructor: p.courseId.createdByName || '',
+          purchasedAt: p.purchasedAt,
+          progressPercentage: track.progressPercentage || 0,
+          isCourseCompleted: track.isCourseCompleted || false,
+          certificateIssued: track.certificateIssued || false
+        };
+      });
 
     res.status(200).json({
       success: true,
@@ -409,10 +398,13 @@ exports.getMyCoursesForStudent = async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Error fetching student my courses:', err);
-    res.status(500).json({ message: 'Failed to fetch student courses', error: err.message });
+    console.error('❌ Error fetching student purchased courses with tracking:', err);
+    res.status(500).json({ message: 'Failed to fetch purchased courses', error: err.message });
   }
 };
+
+
+
 
 exports.getInstructorCourseLearnersReport = async (req, res) => {
   const instructorId = req.user?.userId;
@@ -446,30 +438,29 @@ const trackingRecords = await CourseTracking.find({
 
 
     // 3. Append learners based on course tracking
-    trackingRecords.forEach(record => {
-      const courseIdStr = record.courseId?._id.toString();
-      if (courseMap.has(courseIdStr)) {
-        const courseEntry = courseMap.get(courseIdStr);
+trackingRecords.forEach(record => {
+  const courseIdStr = record.courseId?._id?.toString();
+  if (!courseIdStr || !courseMap.has(courseIdStr)) return;
 
-        const status = record.certificateIssued
-          ? 'Certified'
-          : record.isCourseCompleted
-          ? 'Completed'
-          : 'In Progress';
+  const courseEntry = courseMap.get(courseIdStr);
 
-courseEntry.learners.push({
-  studentName: record.studentId?.registrationDetails?.fullName || 'Unknown',
-  studentEmail: record.studentId?.registrationDetails?.email || 'Unknown',
-  status,
-  startedOn: record.createdAt || null,
-  completedOn: record.isCourseCompleted ? record.updatedAt : null
+  const status = record.certificateIssued
+    ? 'Certified'
+    : record.isCourseCompleted
+    ? 'Completed'
+    : 'In Progress';
+
+  courseEntry.learners.push({
+    studentName: record.studentId?.registrationDetails?.fullName || 'Unknown',
+    studentEmail: record.studentId?.registrationDetails?.email || 'Unknown',
+    status,
+    startedOn: record.createdAt,
+    completedOn: record.isCourseCompleted ? record.updatedAt : null
+  });
+
+  courseEntry.totalLearners = courseEntry.learners.length;
 });
 
-
-
-        courseEntry.totalLearners = courseEntry.learners.length;
-      }
-    });
 
     const report = Array.from(courseMap.values());
 

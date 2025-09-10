@@ -5,6 +5,9 @@ const { signout,getAdminById,getAdminProfileById} = require('./adminController')
 const userProfileController = require('../Admin/userProfileController'); // path as needed
 const coursesController = require('../Admin/coursesController'); // path as needed
 const purchaseController = require("../Payment/purchaseController");
+const  getAdminDashboardStats  = require("../Admin/statController");
+
+
 router.get('/admin/instructors', identifier, userProfileController.getAllVerifiedInstructors);
 router.get('/admin/instructor/:instructorId/profile-details', identifier, userProfileController.getInstructorProfileById);
 
@@ -12,8 +15,7 @@ router.get('/admin/instructor/:instructorId/profile-details', identifier, userPr
 router.get('/admin/students', identifier, userProfileController.getAllVerifiedStudents);
 router.get('/admin/student/:studentId/profile-details', identifier, userProfileController.getStudentProfileById);
 
-// DYNAMIC ROUTES LAST
-// Admin
+router.get("/admin/stats", identifier, getAdminDashboardStats.getAdminDashboardStats);
 router.get("/admin/purchases", identifier, purchaseController.getAdminPurchaseSummary);
 
 router.get('/admin/all-courses', identifier, coursesController.getAllCourses);

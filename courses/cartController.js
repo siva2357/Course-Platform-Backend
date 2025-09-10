@@ -1,5 +1,5 @@
 const Cart = require('./cartModel');
-
+const Purchase = require('../Payment/purchaseModel'); 
 // ✅ Add to Cart
 exports.addToCart = async (req, res) => {
   try {
@@ -10,6 +10,17 @@ exports.addToCart = async (req, res) => {
     const { courseId } = req.body;
     const studentId = req.user.userId;
 
+    // Check if course already purchased by this student
+    const alreadyPurchased = await Purchase.findOne({
+      courseId,
+      purchasedById: studentId,
+      status: 'purchased'
+    });
+    if (alreadyPurchased) {
+      return res.status(400).json({ message: 'You have already purchased this course' });
+    }
+
+    // Check if course already in cart
     const exists = await Cart.findOne({ courseId, studentId });
     if (exists) {
       return res.status(400).json({ message: 'Course already in cart' });
@@ -18,9 +29,11 @@ exports.addToCart = async (req, res) => {
     const item = await Cart.create({ courseId, studentId });
     res.status(201).json(item);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to add to cart' });
   }
 };
+
 
 // ✅ Get Cart with Course + Student Info
 exports.getCart = async (req, res) => {
@@ -31,20 +44,25 @@ exports.getCart = async (req, res) => {
 
     const studentId = req.user.userId;
 
-    const cartItems = await Cart.find({ studentId }).populate([
-      {
-        path: 'courseId',
-        select: 'landingPage.courseTitle landingPage.courseCategory landingPage.courseThumbnail landingPage.courseDescription price.amount'
-      },
-      {
-        path: 'studentId',
-        select: 'firstName lastName email'
-      }
-    ]);
+    // Fetch cart items for this student
+    const cartItems = await Cart.find({ studentId }).populate({
+      path: 'courseId',
+      select: 'landingPage.courseTitle landingPage.courseCategory landingPage.courseThumbnail landingPage.courseDescription price.amount'
+    });
+
+    // Fetch all purchases for this student
+    const studentPurchases = await Purchase.find({
+      purchasedById: studentId
+    }).select('courseId status').lean();
+
+    const purchaseMap = {};
+    studentPurchases.forEach(p => {
+      purchaseMap[String(p.courseId)] = p.status;
+    });
 
     const flattenedItems = cartItems.map(item => {
       const course = item.courseId;
-      const student = item.studentId;
+      const purchaseStatus = purchaseMap[String(course._id)] || 'in-cart';
 
       return {
         _id: item._id,
@@ -54,19 +72,22 @@ exports.getCart = async (req, res) => {
         courseThumbnail: course?.landingPage?.courseThumbnail || '',
         courseDescription: course?.landingPage?.courseDescription || '',
         amount: course?.price?.amount || 0,
-        studentName: `${student?.firstName || ''} ${student?.lastName || ''}`,
-        studentEmail: student?.email || ''
+        purchaseStatus
       };
     });
 
     res.status(200).json({
       totalItems: flattenedItems.length,
+      purchasedCount: studentPurchases.length,
       items: flattenedItems
     });
+
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch cart' });
   }
 };
+
 
 // ✅ Remove from Cart
 exports.removeFromCart = async (req, res) => {

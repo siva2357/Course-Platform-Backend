@@ -16,9 +16,12 @@ const instance = new Razorpay({
 
 // 📌 Create payment order - Students only
 exports.createPaymentOrder = (req, res) => {
-  if (!req.user || req.user.role !== 'student') {
-    return res.status(403).json({ message: 'Only students can initiate payment' });
-  }
+
+  const studentId = req.user.userId;
+
+if (!studentId || req.user.role !== 'student') {
+  return res.status(403).json({ message: 'Only students can ...' });
+}
 
   const amountInRupees = req.body.payload?.amount?.amount;
 
@@ -46,9 +49,12 @@ exports.createPaymentOrder = (req, res) => {
 
 // 📌 Validate payment & store purchase - Students only
 exports.validatePayment = async (req, res) => {
-  if (!req.user || req.user.role !== 'student') {
-    return res.status(403).json({ message: 'Only students can validate payment' });
-  }
+
+const studentId = req.user.userId;
+
+if (!studentId || req.user.role !== 'student') {
+  return res.status(403).json({ message: 'Only students can ...' });
+}
 
   const {
     razorpay_signature,
@@ -56,17 +62,16 @@ exports.validatePayment = async (req, res) => {
     original_order_id,
     courseId,
     courseTitle,
-    amount
+    amount: coursePrice
   } = req.body.payload;
 
+  // verify payment
   const generated_signature = crypto
     .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
     .update(`${original_order_id}|${razorpay_payment_id}`)
     .digest("hex");
 
-  const isPaymentVerified = generated_signature === razorpay_signature;
-
-  if (!isPaymentVerified) {
+  if (generated_signature !== razorpay_signature) {
     return res.status(400).json({ data: { isPaymentVerified: false } });
   }
 
@@ -76,39 +81,65 @@ exports.validatePayment = async (req, res) => {
       return res.status(200).json({ message: "Purchase already recorded" });
     }
 
-await Purchase.create({
-  courseId,
-  courseTitle,
-  orderId: original_order_id,
-  paymentId: razorpay_payment_id,
-  amount,
-  status: 'purchased',
-  purchasedAt: new Date(),
-  purchasedById: req.user.userId, // ✅ FIXED HERE
-  userRole: req.user.role
-});
+    // Compute breakdown
+    const taxCharges = coursePrice * 0.10;       // 10% tax
+    const platformFee = coursePrice * 0.10;      // 10% platform fee
+    const revenueForInstructor = coursePrice - taxCharges - platformFee;
+    const revenueForAdmin = taxCharges + platformFee;
+    const totalPaid = coursePrice + taxCharges;  // total amount student paid
 
+    await Purchase.create({
+      courseId,
+      courseTitle,
+      orderId: original_order_id,
+      paymentId: razorpay_payment_id,
+      amount: totalPaid,
+      taxCharges,
+      platformFee,
+      revenueForInstructor,
+      revenueForAdmin,
+      purchasedById: studentId,
+      userRole: req.user.role,
+      purchasedAt: new Date()
+    });
 
-    res.status(200).json({ data: { isPaymentVerified: true } });
+    res.status(200).json({ data: { isPaymentVerified: true, totalPaid, taxCharges, platformFee, revenueForInstructor } });
   } catch (err) {
     console.error("❌ Error saving purchase:", err);
     res.status(500).json({ error: "Failed to save purchase" });
   }
 };
 
-// 📌 Store Purchase manually (used optionally) - Students only
 exports.storePurchase = async (req, res) => {
-  if (!req.user || req.user.role !== 'student') {
-    return res.status(403).json({ message: 'Only students can store purchase' });
-  }
+  const studentId = req.user.userId;
+
+if (!studentId || req.user.role !== 'student') {
+  return res.status(403).json({ message: 'Only students can ...' });
+}
 
   try {
-    const payload = req.body;
-    payload.purchasedById = req.user._id;
-    payload.userRole = req.user.role;
-    payload.purchasedAt = new Date();
+    const { courseId, courseTitle, amount: coursePrice } = req.body;
 
-    const newPurchase = new Purchase(payload);
+    // Compute breakdown
+    const taxCharges = coursePrice * 0.10;
+    const platformFee = coursePrice * 0.10;
+    const revenueForInstructor = coursePrice - taxCharges - platformFee;
+    const revenueForAdmin = taxCharges + platformFee;
+    const totalPaid = coursePrice + taxCharges;
+
+    const newPurchase = new Purchase({
+      courseId,
+      courseTitle,
+      amount: totalPaid,
+      taxCharges,
+      platformFee,
+      revenueForInstructor,
+      revenueForAdmin,
+      purchasedById: studentId,
+      userRole: req.user.role,
+      purchasedAt: new Date()
+    });
+
     await newPurchase.save();
 
     res.status(201).json({ success: true, data: newPurchase });
@@ -118,11 +149,14 @@ exports.storePurchase = async (req, res) => {
   }
 };
 
+
 // 📌 Refund - Students only
 exports.refundPurchase = async (req, res) => {
-  if (!req.user || req.user.role !== 'student') {
-    return res.status(403).json({ message: 'Only students can request refund' });
-  }
+  const studentId = req.user.userId;
+
+if (!studentId || req.user.role !== 'student') {
+  return res.status(403).json({ message: 'Only students can ...' });
+}
 
   const { purchaseId } = req.params;
 
@@ -133,7 +167,8 @@ exports.refundPurchase = async (req, res) => {
       return res.status(404).json({ message: 'Purchase not found' });
     }
 
-    const isOwner = purchase.purchasedById.toString() === req.user._id.toString();
+    const isOwner = purchase.purchasedById.toString() === studentId;
+
 
     if (!isOwner) {
       return res.status(403).json({
@@ -181,9 +216,10 @@ exports.refundPurchase = async (req, res) => {
 
 
 exports.getPurchaseByOrderId = async (req, res) => {
-  if (!req.user || req.user.role !== 'student') {
-    return res.status(403).json({ message: 'Only students can request refund' });
-  }
+  const studentId = req.user.userId;
+if (!studentId || req.user.role !== 'student') {
+  return res.status(403).json({ message: 'Only students can ...' });
+}
 
   try {
     const { orderId } = req.params;
@@ -207,27 +243,15 @@ exports.getPurchaseByOrderId = async (req, res) => {
 
 
 
-// 📌 Student purchase history
 exports.getStudentPurchaseHistory = async (req, res) => {
   try {
     const studentId = req.user?.userId;
-    const role = req.user?.role;
 
-    if (!studentId || !role) {
-      return res.status(401).json({ message: "Unauthorized: missing user data" });
-    }
-
-    if (role.toLowerCase() !== "student") {
-      return res.status(403).json({ message: "Access denied: only students allowed" });
-    }
-
-    const purchases = await Purchase.find({
-      purchasedById: studentId,
-      userRole: "student"
-    }).populate({
-      path: 'courseId',
-      select: 'landingPage.courseTitle landingPage.courseThumbnail landingPage.courseCategory status createdByName createdAt'
-    });
+    const purchases = await Purchase.find({ purchasedById: studentId })
+      .populate({
+        path: 'courseId',
+        select: 'landingPage.courseTitle landingPage.courseThumbnail landingPage.courseCategory createdByName createdAt'
+      });
 
     const result = purchases.map(p => {
       const isRefunded = p.status === 'refunded';
@@ -239,17 +263,13 @@ exports.getStudentPurchaseHistory = async (req, res) => {
       return {
         purchaseId: p._id,
         status: p.status,
-        statusLabel: isRefunded
-          ? 'Refunded'
-          : isNonRefundable
-            ? 'Non-Refundable'
-            : isEligibleForRefund
-              ? 'Eligible for Refund'
-              : 'Not Eligible for Refund',
-        amount: p.amount,
+        statusLabel: isRefunded ? 'Refunded' : isNonRefundable ? 'Non-Refundable' : isEligibleForRefund ? 'Eligible for Refund' : 'Not Eligible for Refund',
+        coursePrice: p.amount - p.taxCharges, // base course price
+        taxCharges: p.taxCharges,
+        totalPaid: p.amount,
         purchasedAt: p.purchasedAt,
-
-        // 👇 Flattened course fields
+        refundCharges: p.refundCharges || 0,
+        refundedAmount: p.status === 'refunded' ? (p.amount - p.taxCharges - p.refundCharges) : 0,
         courseId: course?._id || '',
         courseTitle: course?.landingPage?.courseTitle || '',
         courseThumbnail: course?.landingPage?.courseThumbnail || '',
@@ -266,9 +286,6 @@ exports.getStudentPurchaseHistory = async (req, res) => {
   }
 };
 
-
-
-// 📌 Refund by student
 exports.studentRefundPurchase = async (req, res) => {
   const { purchaseId } = req.params;
   const studentId = req.user.userId;
@@ -292,185 +309,116 @@ exports.studentRefundPurchase = async (req, res) => {
       return res.status(403).json({ message: 'Refund window expired' });
     }
 
+    // Refund logic: only course price, not tax
+    const refundChargePercent = 0.10;          // 10% deduction
+    const refundableAmount = purchase.amount - purchase.taxCharges; // course price
+    const refundCharge = refundableAmount * refundChargePercent;
+    const refundAmount = refundableAmount - refundCharge;
+
+    // Refund via Razorpay
     const refundRes = await instance.payments.refund(purchase.paymentId, {
-      amount: purchase.amount * 100,
+      amount: refundAmount * 100, // Razorpay in paise
       speed: 'optimum',
-      notes: { reason: 'Student refund', courseTitle: purchase.courseTitle }
+      notes: {
+        reason: 'Student refund (course price only, 10% deduction)',
+        courseTitle: purchase.courseTitle,
+        refundCharge,
+        refundedAmount: refundAmount
+      }
     });
 
+    // Update purchase
     purchase.status = 'refunded';
+    purchase.refundCharges = refundCharge;
     await purchase.save();
 
-    res.status(200).json({ message: 'Refund successful', refundDetails: refundRes });
+    res.status(200).json({
+      message: 'Refund successful',
+      refundedAmount: refundAmount,
+      refundCharge,
+      taxNotRefunded: purchase.taxCharges,
+      refundDetails: refundRes
+    });
+
   } catch (err) {
+    console.error('❌ Refund failed:', err);
     res.status(500).json({ message: "Refund failed", error: err.message });
   }
 };
 
+
 // 📌 Instructor revenue summary
 exports.getInstructorRevenue = async (req, res) => {
   const instructorId = req.user?.userId;
-  const role = req.user?.role;
-
-  if (!instructorId || role !== 'instructor') {
-    return res.status(403).json({ error: "Unauthorized" });
-  }
+  if (!instructorId || req.user?.role !== 'instructor') return res.status(403).json({ error: "Unauthorized" });
 
   try {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000); // last 24 hours
+    const purchases = await Purchase.find()
+      .populate({
+        path: 'courseId',
+        match: { createdById: instructorId },
+        select: 'landingPage.courseTitle createdByName'
+      });
 
-    // Base aggregation pipeline
-    const basePipeline = [
-      {
-        $match: {
-          status: { $in: ['purchased', 'refunded'] },
-          purchasedAt: { $gte: since }
-        }
-      },
-      {
-        $lookup: {
-          from: 'courses',
-          localField: 'courseId',
-          foreignField: '_id',
-          as: 'course'
-        }
-      },
-      { $unwind: '$course' },
-      {
-        $match: {
-          'course.createdById': new mongoose.Types.ObjectId(instructorId)
-        }
-      },
-      {
-        $lookup: {
-          from: 'students', // adjust if your student collection has a different name
-          localField: 'purchasedById',
-          foreignField: '_id',
-          as: 'student'
-        }
-      },
-      { $unwind: { path: '$student', preserveNullAndEmptyArrays: true } },
-      {
-        $project: {
-          studentName: { $ifNull: ['$student.registrationDetails.fullName', 'Unknown'] },
-          studentEmail: { $ifNull: ['$student.registrationDetails.email', 'Unknown'] },
-          courseTitle: '$course.landingPage.courseTitle',
-          amount: { $subtract: ['$amount', '$platformFee'] }, // revenue for instructor
-          purchasedAt: 1,
-          status: {
-            $cond: [{ $eq: ['$status', 'refunded'] }, 'Refunded', 'Paid']
-          }
-        }
-      },
-      { $sort: { purchasedAt: -1 } }
-    ];
+    const result = purchases
+      .filter(p => p.courseId) // only instructor's courses
+      .map(p => ({
+        purchaseId: p._id,
+        courseTitle: p.courseId.landingPage.courseTitle,
+        sellingPrice: p.amount - p.taxCharges,
+        taxCharges: p.taxCharges,
+        platformFee: p.platformFee,
+        revenueForInstructor: p.revenueForInstructor,
+        revenueForInstructor: p.status === 'refunded'? p.revenueForInstructor - p.refundCharges: p.revenueForInstructor,
+        purchasedAt: p.purchasedAt,
+        status: p.status
+      }));
 
-    // Fetch recent purchases
-    let recent = await Purchase.aggregate([...basePipeline]);
-    let isFallback = false;
-
-    // Fallback if no recent purchases
-    if (recent.length === 0) {
-      isFallback = true;
-
-      const fallbackPipeline = [
-        ...basePipeline.map(stage => ({ ...stage })), // deep copy to avoid mutation
-      ];
-
-      // Remove the 24hr filter from the first $match
-      fallbackPipeline[0].$match = {
-        status: { $in: ['purchased', 'refunded'] }
-      };
-
-      // Limit to latest 5
-      fallbackPipeline.push({ $limit: 5 });
-
-      recent = await Purchase.aggregate(fallbackPipeline);
-    }
-
-    return res.status(200).json({
-      purchases: recent,
-      isFallback,
-      message: isFallback
-        ? "No recent purchases in last 24 hours. Showing latest overall."
-        : "Recent purchases from last 24 hours."
-    });
-
+    res.status(200).json({ success: true, total: result.length, data: result });
   } catch (err) {
-    console.error("Recent purchase error:", err.message);
-    res.status(500).json({ error: "Failed to fetch recent purchases" });
+    console.error('Instructor revenue error:', err);
+    res.status(500).json({ error: 'Failed to fetch instructor revenue' });
   }
 };
 
 
 
+
 exports.getAdminPurchaseSummary = async (req, res) => {
+  if (req.user?.role?.toLowerCase() !== 'admin') return res.status(403).json({ message: "Access denied" });
+
   try {
-    const userRole = req.user?.role;
-
-    if (!userRole) {
-      return res.status(401).json({ message: "Unauthorized: missing user role" });
-    }
-
-    if (userRole.toLowerCase() !== "admin") {
-      return res.status(403).json({ message: "Access denied: only admins allowed" });
-    }
-
     const purchases = await Purchase.find()
       .populate({
         path: 'courseId',
-        select: 'landingPage.courseTitle landingPage.courseThumbnail landingPage.courseCategory status createdById createdByName createdAt',
-        populate: {
-          path: 'createdById',            // populate instructor for email
-          select: 'registrationDetails'   // only get registrationDetails (fullName & email)
-        }
+        select: 'landingPage.courseTitle landingPage.courseThumbnail landingPage.courseCategory createdByName createdById',
+        populate: { path: 'createdById', select: 'registrationDetails' }
       })
-      .populate({
-        path: 'purchasedById',
-        select: 'registrationDetails'
-      });
+      .populate({ path: 'purchasedById', select: 'registrationDetails' });
 
-    const result = purchases.map(p => {
-      const isRefunded = p.status === 'refunded';
-      const isNonRefundable = p.status === 'non-refundable';
-      const isEligibleForRefund = p.refundableUntil && new Date() <= new Date(p.refundableUntil);
-
-      const course = p.courseId;
-      const student = p.purchasedById;
-      const instructor = course?.createdById;
-
-      return {
-        purchaseId: p._id,
-        status: p.status,
-        statusLabel: isRefunded
-          ? 'Refunded'
-          : isNonRefundable
-            ? 'Non-Refundable'
-            : isEligibleForRefund
-              ? 'Eligible for Refund'
-              : 'Not Eligible for Refund',
-        amount: p.amount,
-        purchasedAt: p.purchasedAt,
-
-        // Course info
-        courseId: course?._id || '',
-        courseTitle: course?.landingPage?.courseTitle || '',
-        courseThumbnail: course?.landingPage?.courseThumbnail || '',
-        courseCategory: course?.landingPage?.courseCategory || '',
-        courseInstructorName: instructor?.registrationDetails?.fullName || course?.createdByName || '',
-        courseInstructorEmail: instructor?.registrationDetails?.email || '',
-
-        // Student info
-        studentId: student?._id || '',
-        studentName: student?.registrationDetails?.fullName || '',
-        studentEmail: student?.registrationDetails?.email || ''
-      };
-    });
+    const result = purchases.map(p => ({
+      purchaseId: p._id,
+      studentPaid: p.amount,
+      coursePrice: p.amount - p.taxCharges,
+      taxCharges: p.taxCharges,
+      platformFee: p.platformFee,
+      revenueForInstructor: p.revenueForInstructor,
+      revenueForAdmin: p.revenueForAdmin,
+      refundedAmount: p.status === 'refunded' ? (p.amount - p.taxCharges - p.refundCharges) : 0,
+      refundCharges: p.refundCharges || 0,
+      purchasedAt: p.purchasedAt,
+      status: p.status,
+      courseTitle: p.courseId?.landingPage?.courseTitle || '',
+      courseThumbnail: p.courseId?.landingPage?.courseThumbnail || '',
+      courseCategory: p.courseId?.landingPage?.courseCategory || '',
+      studentName: p.purchasedById?.registrationDetails?.fullName || '',
+      studentEmail: p.purchasedById?.registrationDetails?.email || '',
+      instructorName: p.courseId?.createdById?.registrationDetails?.fullName || p.courseId?.createdByName || ''
+    }));
 
     res.status(200).json({ success: true, total: result.length, data: result });
-
   } catch (err) {
-    console.error("❌ Error fetching admin purchase history:", err);
+    console.error("Admin purchase summary error:", err);
     res.status(500).json({ message: "Failed to load purchases", error: err.message });
   }
 };
