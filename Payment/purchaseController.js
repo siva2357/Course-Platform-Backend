@@ -413,7 +413,8 @@ exports.getAdminPurchaseSummary = async (req, res) => {
       courseCategory: p.courseId?.landingPage?.courseCategory || '',
       studentName: p.purchasedById?.registrationDetails?.fullName || '',
       studentEmail: p.purchasedById?.registrationDetails?.email || '',
-      instructorName: p.courseId?.createdById?.registrationDetails?.fullName || p.courseId?.createdByName || ''
+      instructorName: p.courseId?.createdById?.registrationDetails?.fullName || p.courseId?.createdByName || '',
+      instructorEmail: p.courseId?.createdById?.registrationDetails?.email ||''
     }));
 
     res.status(200).json({ success: true, total: result.length, data: result });

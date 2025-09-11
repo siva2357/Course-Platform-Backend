@@ -5,6 +5,9 @@ const StudentProfile = require('../ProfileDetails/studentProfileModel');
 const Course = require('../courses/courseModel');
 const Purchase = require('../Payment/purchaseModel');
 const CourseTracking = require('../courses/courseTrackingModel');
+
+/** Get student profile by ID */
+const mongoose = require("mongoose");
 /** ---------------- INSTRUCTORS ---------------- */
 
 /** Get all verified instructors */
@@ -126,59 +129,74 @@ exports.getAllVerifiedStudents = async (req, res) => {
   }
 };
 
-/** Get student profile by ID */
+
 
 exports.getStudentProfileById = async (req, res) => {
   try {
     const { studentId } = req.params;
 
-    // Fetch student profile
+    // 1. Get student profile
     const profile = await StudentProfile.findOne({ studentId })
-      .select('-__v')
+      .select("-__v")
       .lean();
 
     if (!profile) {
       return res.status(404).json({
         success: false,
-        message: 'Student profile not found'
+        message: "Student profile not found",
       });
     }
 
-    // Fetch all purchases made by student
-    const purchases = await Purchase.find({ purchasedById: studentId, userRole: 'student' })
-      .select('-_id courseId courseTitle amount status purchasedAt refundableUntil')
+    // 2. Get purchases
+    const purchases = await Purchase.find({
+      purchasedById: new mongoose.Types.ObjectId(studentId),
+    })
+      .populate({
+        path: "courseId",
+        select: "landingPage.courseTitle landingPage.courseThumbnail",
+      })
+      .select("courseId amount status purchasedAt")
       .lean();
 
-    // Enrich each purchased course with tracking info
-    const coursesWithTracking = await Promise.all(purchases.map(async (purchase) => {
-      const course = await Course.findById(purchase.courseId)
-        .select('-_id landingPage  price status totalDuration courseTitle createdAt')
-        .lean();
+    // 3. Attach tracking (minimal)
+    const coursesWithTracking = await Promise.all(
+      purchases.map(async (purchase) => {
+        const tracking = await CourseTracking.findOne({
+          studentId: new mongoose.Types.ObjectId(studentId),
+          courseId: purchase.courseId?._id,
+        })
+          .select("progressPercentage isCourseCompleted certificateIssued")
+          .lean();
 
-      const tracking = await CourseTracking.findOne({ studentId, courseId: purchase.courseId })
-        .select('-_id progressPercentage isCourseCompleted certificateIssued')
-        .lean();
+        return {
+          courseId: purchase.courseId?._id,
+          courseTitle: purchase.courseId?.landingPage?.courseTitle || null,
+          courseThumbnail: purchase.courseId?.landingPage?.courseThumbnail || null,
+          purchaseAmount: purchase.amount,
+          purchaseStatus: purchase.status,
+          purchasedAt: purchase.purchasedAt,
+          progressPercentage: tracking?.progressPercentage || 0,
+          isCourseCompleted: tracking?.isCourseCompleted || false,
+          certificateIssued: tracking?.certificateIssued || false,
+        };
+      })
+    );
 
-      return {
-        ...course,
-        purchaseDetails: purchase,
-        tracking: tracking || null
-      };
-    }));
-
+    // 4. Send clean response
     res.status(200).json({
       success: true,
       profile: {
         profileDetails: profile,
-        courses: coursesWithTracking
-      }
+        courses: coursesWithTracking,
+      },
     });
-
   } catch (err) {
     res.status(500).json({
       success: false,
-      message: 'Error fetching student profile',
-      error: err.message
+      message: "Error fetching student profile",
+      error: err.message,
     });
   }
 };
+
+
