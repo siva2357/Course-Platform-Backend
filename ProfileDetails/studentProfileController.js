@@ -2,7 +2,11 @@ const StudentProfile = require('../ProfileDetails/studentProfileModel');
 const Student = require('../Authentication/studentModel');
 const Purchase = require('../Payment/purchaseModel');
 const CourseTracking = require('../courses/courseTrackingModel');
+const Cart = require("../courses/cartModel");
+const Wishlist = require("../courses/wishlistModel");
 const mongoose = require("mongoose");
+
+
 exports.createStudentProfile = async (req, res) => {
   try {
     if (!req.studentId) {
@@ -172,20 +176,39 @@ exports.getStudentById = async (req, res) => {
   }
 };
 
-// DELETE STUDENT + PROFILE
+
 exports.deleteStudentById = async (req, res) => {
   try {
     const studentId = req.params.id;
 
+    // 🔍 Find student
     const foundStudent = await Student.findById(studentId);
     if (!foundStudent) {
       return res.status(404).json({ message: "Student not found" });
     }
 
+    // 1️⃣ Delete profile(s)
     await StudentProfile.deleteMany({ studentId });
+
+    // 2️⃣ Delete purchases
+    await Purchase.deleteMany({ purchasedById: studentId });
+
+    // 3️⃣ Delete course tracking
+    await CourseTracking.deleteMany({ studentId });
+
+    // 4️⃣ Delete cart entries
+    await Cart.deleteMany({ studentId });
+
+    // 5️⃣ Delete wishlist entries
+    await Wishlist.deleteMany({ studentId });
+
+    // 6️⃣ Finally, delete the student record
     await Student.findByIdAndDelete(studentId);
 
-    res.status(200).json({ message: "Student and related profile deleted successfully" });
+    res.status(200).json({
+      message: "Student and all related data (profile, purchases, tracking, cart, wishlist) deleted successfully"
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

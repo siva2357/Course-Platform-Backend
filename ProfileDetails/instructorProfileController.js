@@ -2,7 +2,7 @@ const InstructorProfile = require('../ProfileDetails/instructorProfileModel');
 const Instructor = require('../Authentication/instructorModel');
 const Course = require('../courses/courseModel');
 const Purchase = require('../Payment/purchaseModel');
-
+const CourseTracking = require('../courses/courseTrackingModel');
 // CREATE
 exports.createInstructorProfile = async (req, res) => {
   try {
@@ -169,20 +169,43 @@ exports.getInstructorById = async (req, res) => {
   }
 };
 
-// DELETE INSTRUCTOR + PROFILE
+
 exports.deleteInstructorById = async (req, res) => {
   try {
     const instructorId = req.params.id;
 
+    // 🔍 Find instructor
     const foundInstructor = await Instructor.findById(instructorId);
     if (!foundInstructor) {
       return res.status(404).json({ message: "Instructor not found" });
     }
 
+    // 1️⃣ Delete instructor profile(s)
     await InstructorProfile.deleteMany({ instructorId });
+
+    // 2️⃣ Find courses created by instructor
+    const instructorCourses = await Course.find({ createdById: instructorId });
+
+    if (instructorCourses.length > 0) {
+      const courseIds = instructorCourses.map(c => c._id);
+
+      // 2a: Delete purchases linked to these courses
+      await Purchase.deleteMany({ courseId: { $in: courseIds } });
+
+      // 2b: Delete course tracking linked to these courses
+      await CourseTracking.deleteMany({ courseId: { $in: courseIds } });
+
+      // 2c: Delete courses themselves
+      await Course.deleteMany({ createdById: instructorId });
+    }
+
+    // 3️⃣ Delete the instructor
     await Instructor.findByIdAndDelete(instructorId);
 
-    res.status(200).json({ message: "Instructor and related profile deleted successfully" });
+    res.status(200).json({
+      message: "Instructor, profile, courses, purchases, and course tracking deleted successfully"
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
