@@ -77,19 +77,21 @@ exports.getCart = async (req, res) => {
     }
 
     // Prepare flattened cart items for response
-    const flattenedItems = cartItems.map(item => {
-      const course = item.courseId;
-      return {
-        _id: item._id,
-        addedAt: item.addedAt,
-        courseTitle: course?.landingPage?.courseTitle || 'Course not found',
-        courseCategory: course?.landingPage?.courseCategory || '',
-        courseThumbnail: course?.landingPage?.courseThumbnail || '',
-        courseDescription: course?.landingPage?.courseDescription || '',
-        amount: course?.price?.amount || 0,
-        purchaseStatus: 'in-cart'
-      };
-    });
+const flattenedItems = cartItems.map(item => {
+  const course = item.courseId;
+  return {
+    _id: item._id,
+    courseId: course?._id || null,   // ✅ include courseId
+    addedAt: item.addedAt,
+    courseTitle: course?.landingPage?.courseTitle || 'Course not found',
+    courseCategory: course?.landingPage?.courseCategory || '',
+    courseThumbnail: course?.landingPage?.courseThumbnail || '',
+    courseDescription: course?.landingPage?.courseDescription || '',
+    amount: course?.price?.amount || 0,
+    purchaseStatus: 'in-cart'
+  };
+});
+
 
     res.status(200).json({
       totalItems: flattenedItems.length,
