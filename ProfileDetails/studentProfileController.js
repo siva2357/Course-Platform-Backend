@@ -1,6 +1,8 @@
 const StudentProfile = require('../ProfileDetails/studentProfileModel');
 const Student = require('../Authentication/studentModel');
-
+const Purchase = require('../Payment/purchaseModel');
+const CourseTracking = require('../courses/courseTrackingModel');
+const mongoose = require("mongoose");
 exports.createStudentProfile = async (req, res) => {
   try {
     if (!req.studentId) {
@@ -47,7 +49,6 @@ exports.createStudentProfile = async (req, res) => {
   }
 };
 
-// GET PROFILE BY STUDENT ID
 exports.getStudentProfile = async (req, res) => {
   try {
     const studentId = req.params.studentId;
@@ -67,7 +68,50 @@ exports.getStudentProfile = async (req, res) => {
     studentProfile.profileDetails.fullName = student.registrationDetails.fullName;
     studentProfile.profileDetails.userName = student.registrationDetails.userName;
 
-    res.status(200).json(studentProfile);
+
+        // 2. Get purchases
+        const purchases = await Purchase.find({
+          purchasedById: new mongoose.Types.ObjectId(studentId),
+        })
+          .populate({
+            path: "courseId",
+            select: "landingPage.courseTitle landingPage.courseThumbnail",
+          })
+          .select("courseId amount status purchasedAt")
+          .lean();
+
+
+              // 3. Attach tracking (minimal)
+              const coursesWithTracking = await Promise.all(
+                purchases.map(async (purchase) => {
+                  const tracking = await CourseTracking.findOne({
+                    studentId: new mongoose.Types.ObjectId(studentId),
+                    courseId: purchase.courseId?._id,
+                  })
+                    .select("progressPercentage isCourseCompleted certificateIssued")
+                    .lean();
+          
+                  return {
+                    courseId: purchase.courseId?._id,
+                    courseTitle: purchase.courseId?.landingPage?.courseTitle || null,
+                    courseThumbnail: purchase.courseId?.landingPage?.courseThumbnail || null,
+                    purchaseAmount: purchase.amount,
+                    purchaseStatus: purchase.status,
+                    purchasedAt: purchase.purchasedAt,
+                    progressPercentage: tracking?.progressPercentage || 0,
+                    isCourseCompleted: tracking?.isCourseCompleted || false,
+                    certificateIssued: tracking?.certificateIssued || false,
+                  };
+                })
+              );
+
+        res.status(200).json({
+      success: true,
+      profile: {
+        profileDetails: studentProfile,
+        courses: coursesWithTracking,
+      },
+    });
   } catch (error) {
     console.error("Error fetching student profile:", error);
     res.status(500).json({ message: "Internal server error" });

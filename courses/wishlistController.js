@@ -1,4 +1,5 @@
 const Wishlist = require('./wishlistModel');
+const Purchase = require('../Payment/purchaseModel'); // import purchase model
 
 // ✅ Add to Wishlist
 exports.addToWishlist = async (req, res) => {
@@ -25,7 +26,7 @@ exports.addToWishlist = async (req, res) => {
   }
 };
 
-// ✅ Get Wishlist
+
 exports.getWishlist = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
@@ -34,22 +35,34 @@ exports.getWishlist = async (req, res) => {
 
     const studentId = req.user.userId;
 
+    // Fetch all purchased course IDs for this student
+    const purchasedCourses = await Purchase.find({
+      purchasedById: studentId,
+      status: 'purchased'
+    }).select('courseId').lean();
+
+    const purchasedCourseIds = purchasedCourses.map(p => String(p.courseId));
+
+    // Fetch wishlist items
     const wishListItems = await Wishlist.find({ studentId }).populate({
       path: 'courseId',
       select: 'landingPage price'
     });
 
+    // Flatten for response and mark if purchased
     const flattenedItems = wishListItems.map(item => {
       const course = item.courseId;
+      const courseIdStr = String(course?._id);
       return {
         _id: item._id,
-        courseId: course?._id, // ✅ required to match frontend interface
+        courseId: course?._id,
         addedAt: item.addedAt,
         courseTitle: course?.landingPage?.courseTitle || '',
         courseCategory: course?.landingPage?.courseCategory || '',
         courseThumbnail: course?.landingPage?.courseThumbnail || '',
         courseDescription: course?.landingPage?.courseDescription || '',
-        amount: course?.price?.amount || 0
+        amount: course?.price?.amount || 0,
+        isPurchased: purchasedCourseIds.includes(courseIdStr) // ✅ true/false
       };
     });
 
@@ -57,10 +70,13 @@ exports.getWishlist = async (req, res) => {
       totalItems: flattenedItems.length,
       items: flattenedItems
     });
+
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch wishlist' });
   }
 };
+
 
 
 // ✅ Remove from Wishlist
