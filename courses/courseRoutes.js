@@ -6,6 +6,9 @@ const {identifier }= require ( '../Middleware/identification')
 // Base
 router.post('/course', identifier, courseController.createCourse);
 router.get('/course/:id',  courseController.getCourse);
+// Returns all files for all courses of an instructor
+router.get("/course-files", identifier, courseController.getInstructorCourseFiles);
+
 // Instructor-only: Get their own created courses
 router.get('/instructor/my-courses', identifier, courseController.getInstructorCourses);
 router.get("/instructor/learners/report", identifier,courseController.getInstructorCourseLearnersReport);
@@ -39,6 +42,7 @@ router.patch('/course/:id/verify',identifier,  courseController.verifyCourse);
 
 // Admin reject course
 router.patch('/course/:id/reject', identifier, courseController.rejectCourse);
+
 
 
 router.get('/student/courses', identifier, courseController.getPublishedCoursesForStudents);

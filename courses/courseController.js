@@ -802,3 +802,50 @@ exports.getInstructorSummaryAnalytics = async (req, res) => {
     res.status(500).json({ error: "Summary failed" });
   }
 };
+
+
+
+exports.getInstructorCourseFiles = async (req, res) => {
+  try {
+    const instructorId = req.user?.userId;
+    if (!instructorId) {
+      return res.status(400).json({ message: "Invalid request" });
+    }
+
+    // Fetch all courses by instructor
+    const courses = await Course.find({ createdById: instructorId });
+    if (!courses.length) {
+      return res.status(404).json({ message: "No courses found" });
+    }
+
+    const result = courses.map(course => {
+      let lectureContents = [];
+
+      // Collect lecture content URLs
+      course.curriculum?.sections?.forEach(section => {
+        section.lectures?.forEach(lecture => {
+          lecture.lectureContent?.forEach(url => {
+            if (url.startsWith("https://firebasestorage.googleapis.com")) {
+              lectureContents.push(url);
+            }
+          });
+        });
+      });
+
+      return {
+        courseTitle: course.title,
+        courseThumbnail: course.landingPage?.courseThumbnail || null,
+        coursePreview: course.landingPage?.coursePreview || null,
+        lectureContents
+      };
+    });
+
+    res.json({ courses: result });
+  } catch (error) {
+    console.error("Error fetching instructor course files:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+

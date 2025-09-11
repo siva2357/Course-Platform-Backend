@@ -1,5 +1,7 @@
 const InstructorProfile = require('../ProfileDetails/instructorProfileModel');
 const Instructor = require('../Authentication/instructorModel');
+const Course = require('../courses/courseModel');
+const Purchase = require('../Payment/purchaseModel');
 
 // CREATE
 exports.createInstructorProfile = async (req, res) => {
@@ -68,7 +70,45 @@ exports.getInstructorProfile = async (req, res) => {
     instructorProfile.profileDetails.fullName = instructor.registrationDetails.fullName;
     instructorProfile.profileDetails.userName = instructor.registrationDetails.userName;
 
-    res.status(200).json(instructorProfile);
+
+
+        // Fetch all courses posted by this instructor
+        const courses = await Course.find({ 
+          createdById: instructorId, 
+          userRole: 'instructor' 
+        })
+        .select('landingPage price status totalDuration createdAt') // ✅ only required fields
+        .lean();
+
+
+
+            // Add revenue and totalSales
+            const coursesFlat = await Promise.all(courses.map(async (course) => {
+              const purchases = await Purchase.find({ courseId: course._id, status: 'purchased' })
+                .select('revenueForInstructor amount')
+                .lean();
+        
+              const revenue = purchases.reduce((sum, p) => sum + (p.revenueForInstructor || 0), 0);
+              const totalSales = purchases.reduce((sum, p) => sum + (p.amount || 0), 0);
+        
+              return {
+                landingPage: course.landingPage,
+                price: course.price,
+                status: course.status,
+                totalDuration: course.totalDuration,
+                createdAt: course.createdAt,
+                revenue,
+                totalSales
+              };
+            }));
+
+    res.status(200).json({
+      success: true,
+      profile: {
+        profileDetails: instructorProfile,
+        courses: coursesFlat
+      }
+    });
   } catch (error) {
     console.error("Error fetching instructor profile:", error);
     res.status(500).json({ message: "Internal server error" });
