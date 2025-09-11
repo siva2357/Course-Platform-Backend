@@ -189,7 +189,7 @@ if (!studentId || req.user.role !== 'student') {
     }
 
     const refundResponse = await instance.payments.refund(purchase.paymentId, {
-      amount: purchase.amount * 100,
+      amount: purchase.amount ,
       speed: 'optimum',
       notes: {
         reason: 'Refund within 5-minute window',
