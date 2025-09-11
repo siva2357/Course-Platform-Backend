@@ -334,10 +334,6 @@ exports.getPublishedCoursesForStudents = async (req, res) => {
   }
 };
 
-
-
-
-
 exports.getMyCoursesForStudent = async (req, res) => {
   try {
     const studentId = req.params.studentId || req.user?.userId;
@@ -402,8 +398,6 @@ exports.getMyCoursesForStudent = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch purchased courses', error: err.message });
   }
 };
-
-
 
 
 exports.getInstructorCourseLearnersReport = async (req, res) => {
@@ -471,8 +465,6 @@ trackingRecords.forEach(record => {
     return res.status(500).json({ error: "Failed to generate learner report" });
   }
 };
-
-
 
 
 exports.getInstructorRecentPurchases = async (req, res) => {
