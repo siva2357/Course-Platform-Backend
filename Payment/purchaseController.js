@@ -151,68 +151,72 @@ if (!studentId || req.user.role !== 'student') {
 
 
 // 📌 Refund - Students only
+// 📌 Refund - Students only
 exports.refundPurchase = async (req, res) => {
   const studentId = req.user.userId;
-
-if (!studentId || req.user.role !== 'student') {
-  return res.status(403).json({ message: 'Only students can ...' });
-}
+  if (!studentId || req.user.role !== 'student') {
+    return res.status(403).json({ message: 'Only students can request a refund' });
+  }
 
   const { purchaseId } = req.params;
 
   try {
     const purchase = await Purchase.findById(purchaseId);
+    if (!purchase) return res.status(404).json({ message: 'Purchase not found' });
 
-    if (!purchase) {
-      return res.status(404).json({ message: 'Purchase not found' });
-    }
-
-    const isOwner = purchase.purchasedById.toString() === studentId;
-
-
-    if (!isOwner) {
-      return res.status(403).json({
-        message: 'Unauthorized: Only the purchasing student can refund'
-      });
+    if (purchase.purchasedById.toString() !== studentId) {
+      return res.status(403).json({ message: 'Unauthorized' });
     }
 
     if (purchase.status === 'refunded') {
       return res.status(400).json({ message: 'Already refunded' });
     }
 
-    const diffMinutes = (new Date() - new Date(purchase.purchasedAt)) / 1000 / 60;
-
+    // Refund allowed only within 5 minutes
+    const diffMinutes = (Date.now() - new Date(purchase.purchasedAt)) / 60000;
     if (diffMinutes > 5) {
       purchase.status = 'non-refundable';
       await purchase.save();
       return res.status(403).json({ message: 'Refund window expired' });
     }
 
-    const refundResponse = await instance.payments.refund(purchase.paymentId, {
-      amount: purchase.amount ,
+    // Refund logic: only course price, not tax
+    const refundChargePercent = 0.10; // 10% deduction
+    const refundableAmount = purchase.amount - purchase.taxCharges; // course price only
+    const refundCharge = refundableAmount * refundChargePercent;
+    const refundAmount = refundableAmount - refundCharge;
+
+    // Refund via Razorpay
+    const refundRes = await instance.payments.refund(purchase.paymentId, {
+      amount: refundAmount, // Razorpay expects paise
       speed: 'optimum',
       notes: {
         reason: 'Refund within 5-minute window',
-        courseTitle: purchase.courseTitle
+        courseTitle: purchase.courseTitle,
+        refundCharge,
+        refundedAmount: refundAmount
       }
     });
 
+    // Update DB
     purchase.status = 'refunded';
+    purchase.refundCharges = refundCharge;
+    purchase.revenueForInstructor = 0; // instructor earns nothing if refunded
     await purchase.save();
 
     res.status(200).json({
       message: 'Refund successful',
-      refundDetails: refundResponse,
-      purchase
+      refundedAmount: refundAmount,
+      refundCharge,
+      taxNotRefunded: purchase.taxCharges,
+      refundDetails: refundRes
     });
-  } catch (error) {
-    console.error('❌ Refund failed:', error);
-    res.status(500).json({
-      message: 'Refund failed',
-      error: error?.error?.description || 'Server error'
-    });
+  } catch (err) {
+    console.error('❌ Refund failed:', err);
+    res.status(500).json({ message: 'Refund failed', error: err.message });
   }
 };
+
 
 
 exports.getPurchaseByOrderId = async (req, res) => {
@@ -286,6 +290,7 @@ exports.getStudentPurchaseHistory = async (req, res) => {
   }
 };
 
+
 exports.studentRefundPurchase = async (req, res) => {
   const { purchaseId } = req.params;
   const studentId = req.user.userId;
@@ -310,14 +315,13 @@ exports.studentRefundPurchase = async (req, res) => {
     }
 
     // Refund logic: only course price, not tax
-    const refundChargePercent = 0.10;          // 10% deduction
-    const refundableAmount = purchase.amount - purchase.taxCharges; // course price
+    const refundChargePercent = 0.10;
+    const refundableAmount = purchase.amount - purchase.taxCharges;
     const refundCharge = refundableAmount * refundChargePercent;
     const refundAmount = refundableAmount - refundCharge;
 
-    // Refund via Razorpay
     const refundRes = await instance.payments.refund(purchase.paymentId, {
-      amount: refundAmount * 100, // Razorpay in paise
+      amount: refundAmount ,
       speed: 'optimum',
       notes: {
         reason: 'Student refund (course price only, 10% deduction)',
@@ -327,9 +331,9 @@ exports.studentRefundPurchase = async (req, res) => {
       }
     });
 
-    // Update purchase
     purchase.status = 'refunded';
     purchase.refundCharges = refundCharge;
+    purchase.revenueForInstructor = 0;
     await purchase.save();
 
     res.status(200).json({
@@ -339,21 +343,20 @@ exports.studentRefundPurchase = async (req, res) => {
       taxNotRefunded: purchase.taxCharges,
       refundDetails: refundRes
     });
-
   } catch (err) {
     console.error('❌ Refund failed:', err);
     res.status(500).json({ message: "Refund failed", error: err.message });
   }
 };
 
-
-// 📌 Instructor revenue summary
 exports.getInstructorRevenue = async (req, res) => {
   const instructorId = req.user?.userId;
-  if (!instructorId || req.user?.role !== 'instructor') return res.status(403).json({ error: "Unauthorized" });
+  if (!instructorId || req.user?.role !== 'instructor') {
+    return res.status(403).json({ error: "Unauthorized" });
+  }
 
   try {
-    const purchases = await Purchase.find()
+    const purchases = await Purchase.find({ status: 'purchased' }) // ✅ only purchased
       .populate({
         path: 'courseId',
         match: { createdById: instructorId },
@@ -362,17 +365,19 @@ exports.getInstructorRevenue = async (req, res) => {
 
     const result = purchases
       .filter(p => p.courseId) // only instructor's courses
-      .map(p => ({
-        purchaseId: p._id,
-        courseTitle: p.courseId.landingPage.courseTitle,
-        sellingPrice: p.amount - p.taxCharges,
-        taxCharges: p.taxCharges,
-        platformFee: p.platformFee,
-        revenueForInstructor: p.revenueForInstructor,
-        revenueForInstructor: p.status === 'refunded'? p.revenueForInstructor - p.refundCharges: p.revenueForInstructor,
-        purchasedAt: p.purchasedAt,
-        status: p.status
-      }));
+      .map(p => {
+        const sellingPrice = p.amount - p.taxCharges;
+        return {
+          purchaseId: p._id,
+          courseTitle: p.courseId.landingPage.courseTitle,
+          sellingPrice,
+          taxCharges: p.taxCharges,
+          platformFee: p.platformFee,
+          revenueForInstructor: p.revenueForInstructor, // ✅ only purchased ones here
+          purchasedAt: p.purchasedAt,
+          status: p.status
+        };
+      });
 
     res.status(200).json({ success: true, total: result.length, data: result });
   } catch (err) {
@@ -384,8 +389,12 @@ exports.getInstructorRevenue = async (req, res) => {
 
 
 
+
+// 📌 Admin purchase summary
 exports.getAdminPurchaseSummary = async (req, res) => {
-  if (req.user?.role?.toLowerCase() !== 'admin') return res.status(403).json({ message: "Access denied" });
+  if (req.user?.role?.toLowerCase() !== 'admin') {
+    return res.status(403).json({ message: "Access denied" });
+  }
 
   try {
     const purchases = await Purchase.find()
@@ -402,7 +411,7 @@ exports.getAdminPurchaseSummary = async (req, res) => {
       coursePrice: p.amount - p.taxCharges,
       taxCharges: p.taxCharges,
       platformFee: p.platformFee,
-      revenueForInstructor: p.revenueForInstructor,
+      revenueForInstructor: p.status === 'refunded' ? 0 : p.revenueForInstructor,
       revenueForAdmin: p.revenueForAdmin,
       refundedAmount: p.status === 'refunded' ? (p.amount - p.taxCharges - p.refundCharges) : 0,
       refundCharges: p.refundCharges || 0,
@@ -414,7 +423,7 @@ exports.getAdminPurchaseSummary = async (req, res) => {
       studentName: p.purchasedById?.registrationDetails?.fullName || '',
       studentEmail: p.purchasedById?.registrationDetails?.email || '',
       instructorName: p.courseId?.createdById?.registrationDetails?.fullName || p.courseId?.createdByName || '',
-      instructorEmail: p.courseId?.createdById?.registrationDetails?.email ||''
+      instructorEmail: p.courseId?.createdById?.registrationDetails?.email || ''
     }));
 
     res.status(200).json({ success: true, total: result.length, data: result });
