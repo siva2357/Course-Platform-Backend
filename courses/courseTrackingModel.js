@@ -8,7 +8,7 @@ const contentStatusSchema = new mongoose.Schema({
   type: String,
   url: String,
   value: String,
-  status: { type: String, enum: ["Pending", "Completed"], default: "Pending" }
+  status: { type: String, enum: ["In Progress","Pending", "Completed"], default: "In Progress" }
 }, { _id: false });
 
 // Lecture tracking
@@ -17,7 +17,7 @@ const lectureStatusSchema = new mongoose.Schema({
   lectureTitle: String,
   lectureDescription: String,
   lectureDuration: String,
-  status: { type: String, enum: ["Pending", "Completed"], default: "Pending" },
+  status: { type: String, enum: ["In Progress","Pending", "Completed"], default: "In Progress" },
   contents: [contentStatusSchema]
 }, { _id: false });
 
@@ -26,7 +26,7 @@ const sectionStatusSchema = new mongoose.Schema({
   _id: { type: mongoose.Schema.Types.ObjectId },
   sectionTitle: String,
   sectionDuration: String,
-  status: { type: String, enum: ["Pending", "Completed"], default: "Pending" },
+  status: { type: String, enum: ["In Progress", "Pending", "Completed"], default: "In Progress" },
   lectures: [lectureStatusSchema]
 }, { _id: false });
 

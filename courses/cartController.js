@@ -39,59 +39,35 @@ exports.addToCart = async (req, res) => {
 exports.getCart = async (req, res) => {
   try {
     if (req.user.role !== 'student') {
-      return res.status(403).json({ message: 'Only students can view their cart' });
+      return res.status(403).json({ message: 'Only students can view cart' });
     }
 
     const studentId = req.user.userId;
 
-    // Fetch all purchases for this student
-    const studentPurchases = await Purchase.find({
-      purchasedById: studentId
-    }).select('courseId status').lean();
+    // Get cart items with course populated (basic)
+    let cartItems = await Cart.find({ studentId }).populate('courseId');
+    
+    // Get purchased courses to mark purchased items
+    const purchasedCourses = await Purchase.find({ purchasedById: studentId, status: 'purchased' }).select('courseId').lean();
+    const purchasedCourseIds = purchasedCourses.map(p => String(p.courseId));
 
-    const purchasedCourseIds = studentPurchases.map(p => String(p.courseId));
-
-    // Fetch cart items for this student
-    let cartItems = await Cart.find({ studentId }).populate({
-      path: 'courseId',
-      select: 'landingPage.courseTitle landingPage.courseCategory landingPage.courseThumbnail landingPage.courseDescription price.amount'
-    });
-
-    // ✅ Remove cart items that have already been purchased or deleted
-    cartItems = cartItems.filter(item => {
-      const courseExists = item.courseId; // not null
-      const notPurchased = !purchasedCourseIds.includes(String(item.courseId?._id));
-      return courseExists && notPurchased;
-    });
-
-    // Optional: Clean up DB automatically
-    const cartItemIdsToRemove = await Cart.find({
-      studentId,
-      $or: [
-        { courseId: null },
-        { courseId: { $in: purchasedCourseIds } }
-      ]
-    }).select('_id');
-    if (cartItemIdsToRemove.length) {
-      await Cart.deleteMany({ _id: { $in: cartItemIdsToRemove.map(c => c._id) } });
-    }
-
-    // Prepare flattened cart items for response
-const flattenedItems = cartItems.map(item => {
-  const course = item.courseId;
-  return {
-    _id: item._id,
-    courseId: course?._id || null,   // ✅ include courseId
-    addedAt: item.addedAt,
-    courseTitle: course?.landingPage?.courseTitle || 'Course not found',
-    courseCategory: course?.landingPage?.courseCategory || '',
-    courseThumbnail: course?.landingPage?.courseThumbnail || '',
-    courseDescription: course?.landingPage?.courseDescription || '',
-    amount: course?.price?.amount || 0,
-    purchaseStatus: 'in-cart'
-  };
-});
-
+    // Flatten and keep only items still valid
+    const flattenedItems = cartItems
+      .filter(item => item.courseId && !purchasedCourseIds.includes(String(item.courseId._id)))
+      .map(item => {
+        const course = item.courseId;
+        return {
+          _id: item._id,
+          courseId: course._id,
+          addedAt: item.addedAt,
+          courseTitle: course?.landingPage?.courseTitle || course?.title || 'Course not found',
+          courseCategory: course?.landingPage?.courseCategory || '',
+          courseThumbnail: course?.landingPage?.courseThumbnail || '',
+          courseDescription: course?.landingPage?.courseDescription || '',
+          amount: course?.price?.amount || 0,
+          purchaseStatus: 'in-cart'
+        };
+      });
 
     res.status(200).json({
       totalItems: flattenedItems.length,
@@ -103,6 +79,7 @@ const flattenedItems = cartItems.map(item => {
     res.status(500).json({ error: 'Failed to fetch cart' });
   }
 };
+
 
 
 
